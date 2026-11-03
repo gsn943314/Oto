@@ -1,245 +1,167 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useCallback } from 'react';
 import { useAppContext } from '../App';
 import { AudioRecorder } from '../services/AudioRecorder';
-import { ErrorType } from '../../shared/types';
+import { ErrorType, type TriggerKey } from '../../shared/types';
 
 interface RecordingControlProps {
   audioRecorder: AudioRecorder;
-  onRecordingComplete: (audioBlob: Blob, duration: number) => void;
+  onRecordingComplete: (audioBlob: Blob, duration: number, viaHotkey: boolean) => void;
+  triggerKey?: TriggerKey;
 }
 
-export const RecordingControl: React.FC<RecordingControlProps> = ({
-  audioRecorder,
-  onRecordingComplete,
-}) => {
-  const {
-    isRecording,
-    isProcessing,
-    setIsRecording,
-    setError,
-    recordingDuration,
-    setRecordingDuration,
-    t,
-  } = useAppContext();
+export const TRIGGER_LABEL: Record<TriggerKey, string> = { control: '⌃ control', fn: 'fn', rightOption: '⌥ option', off: '' };
 
-  const [startTime, setStartTime] = useState<number>(0);
-  const [settings, setSettings] = useState<any>(null);
+// The record button: a soft white bubble like the ones in the site's hero. Recording turns it ink with a ring
+// that swells with your voice; while OpenAI works, an arc circles it.
+export const RecordingControl: React.FC<RecordingControlProps> = ({ audioRecorder, onRecordingComplete, triggerKey = 'control' }) => {
+  const { isRecording, isProcessing, setIsRecording, setError, setRecordingDuration, setTranscribedText, t } = useAppContext();
+  const startTimeRef = useRef(0);
+  // started from the trigger key in another app: the floating pill shows the progress and the text gets pasted
+  const viaHotkeyRef = useRef(false);
+  const startingRef = useRef(false);
+  const ringRef = useRef<HTMLSpanElement>(null);
 
-  // Load settings for shortcuts
+  // the clock
   useEffect(() => {
-    const loadSettings = async () => {
-      try {
-        const loadedSettings = await window.electronAPI.loadSettings();
-        setSettings(loadedSettings);
-      } catch (error) {
-        console.error('Failed to load settings:', error);
-      }
-    };
-    
-    loadSettings();
-    
-    // Listen for settings updates
-    const handleSettingsUpdate = (event: any) => {
-      setSettings(event.detail);
-    };
-    
-    window.addEventListener('settings-updated', handleSettingsUpdate);
-    return () => {
-      window.removeEventListener('settings-updated', handleSettingsUpdate);
-    };
-  }, []);
-
-  // Timer effect
-  useEffect(() => {
-    let interval: NodeJS.Timeout | null = null;
-
-    if (isRecording) {
-      interval = setInterval(() => {
-        const elapsed = Math.floor((Date.now() - startTime) / 1000);
-        setRecordingDuration(elapsed);
-      }, 100);
-    } else {
+    if (!isRecording) {
       setRecordingDuration(0);
+      return;
     }
+    const id = setInterval(() => setRecordingDuration(Math.floor((Date.now() - startTimeRef.current) / 1000)), 200);
+    return () => clearInterval(id);
+  }, [isRecording, setRecordingDuration]);
 
-    return () => {
-      if (interval) {
-        clearInterval(interval);
-      }
-    };
-  }, [isRecording, startTime, setRecordingDuration]);
-
-  // Keyboard shortcuts - use settings
+  // the voice level, written straight onto the ring (no re-render per frame). A timer rather than
+  // requestAnimationFrame: animation frames stop while the window is minimised or hidden, and the floating
+  // indicators must keep moving then
   useEffect(() => {
-    if (!settings) return;
-
-    const parseShortcut = (shortcut: string) => {
-      const parts = shortcut.split('+');
-      return {
-        needsCtrlOrCmd: parts.includes('CommandOrControl') || parts.includes('Command') || parts.includes('Control'),
-        needsShift: parts.includes('Shift'),
-        needsAlt: parts.includes('Alt'),
-        key: parts[parts.length - 1].toLowerCase(),
-      };
-    };
-
-    const startShortcut = parseShortcut(settings.shortcuts.startRecording);
-    const stopShortcut = parseShortcut(settings.shortcuts.stopRecording);
-
-    const handleKeyPress = (event: KeyboardEvent) => {
-      const eventKey = event.key.toLowerCase();
-
-      // Check for start recording shortcut
-      if (
-        !isRecording &&
-        !isProcessing &&
-        eventKey === startShortcut.key &&
-        (!startShortcut.needsCtrlOrCmd || event.metaKey || event.ctrlKey) &&
-        (!startShortcut.needsShift || event.shiftKey) &&
-        (!startShortcut.needsAlt || event.altKey)
-      ) {
-        event.preventDefault();
-        handleStartRecording();
-      }
-      
-      // Check for stop recording shortcut
-      if (
-        isRecording &&
-        eventKey === stopShortcut.key &&
-        (!stopShortcut.needsCtrlOrCmd || event.metaKey || event.ctrlKey) &&
-        (!stopShortcut.needsShift || event.shiftKey) &&
-        (!stopShortcut.needsAlt || event.altKey)
-      ) {
-        event.preventDefault();
-        handleStopRecording();
+    const stream = isRecording ? audioRecorder.getStream() : null;
+    if (!stream) return;
+    const ctx = new AudioContext();
+    ctx.resume().catch(() => {}); // started from the trigger key there was no click, so it may begin suspended
+    const analyser = ctx.createAnalyser();
+    analyser.fftSize = 512;
+    ctx.createMediaStreamSource(stream).connect(analyser);
+    const data = new Uint8Array(analyser.fftSize);
+    let level = 0, lastSent = 0;
+    const tick = () => {
+      analyser.getByteTimeDomainData(data);
+      let sum = 0;
+      for (const v of data) sum += ((v - 128) / 128) ** 2;
+      const rms = Math.min(1, Math.sqrt(sum / data.length) * 4);
+      level += (rms - level) * 0.25;
+      ringRef.current?.style.setProperty('--level', level.toFixed(3));
+      const now = performance.now();
+      if (viaHotkeyRef.current && audioRecorder.isRecording() && now - lastSent > 60) {
+        lastSent = now;
+        window.electronAPI.setOverlayState({ kind: 'recording', level, seconds: Math.floor((Date.now() - startTimeRef.current) / 1000) });
       }
     };
-
-    window.addEventListener('keydown', handleKeyPress);
+    const timer = setInterval(tick, 33);
     return () => {
-      window.removeEventListener('keydown', handleKeyPress);
+      clearInterval(timer);
+      ctx.close().catch(() => {});
     };
-  }, [isRecording, isProcessing, settings]);
+  }, [isRecording, audioRecorder]);
 
-  const handleStartRecording = useCallback(async () => {
+  const start = useCallback(async (viaHotkey = false) => {
+    if (startingRef.current) return;
+    startingRef.current = true;
+    viaHotkeyRef.current = viaHotkey;
     try {
       setError(null);
+      setTranscribedText(''); // each recording starts on a clean sheet
+      if (viaHotkey) window.electronAPI.setOverlayState({ kind: 'recording', level: 0, seconds: 0 });
       await audioRecorder.startRecording();
+      startTimeRef.current = Date.now();
       setIsRecording(true);
-      setStartTime(Date.now());
     } catch (error: any) {
       console.error('Failed to start recording:', error);
-      setError(error);
+      const appError = error?.type ? error : { type: ErrorType.AUDIO_RECORDING_FAILED, message: error?.message ?? 'Failed to start recording' };
+      setError(appError);
       setIsRecording(false);
+      if (viaHotkey) window.electronAPI.setOverlayState({ kind: 'error', label: t.errorCopy[appError.type as ErrorType]?.status ?? t.status.error });
+    } finally {
+      startingRef.current = false;
     }
-  }, [audioRecorder, setIsRecording, setError]);
+  }, [audioRecorder, setIsRecording, setError, setTranscribedText, t]);
 
-  const handleStopRecording = useCallback(async () => {
+  const stop = useCallback(async () => {
+    const duration = Math.round((Date.now() - startTimeRef.current) / 1000);
     try {
       const audioBlob = await audioRecorder.stopRecording();
-      const duration = recordingDuration;
       setIsRecording(false);
-      onRecordingComplete(audioBlob, duration);
+      onRecordingComplete(audioBlob, duration, viaHotkeyRef.current);
     } catch (error: any) {
       console.error('Failed to stop recording:', error);
-      setError({
-        type: ErrorType.AUDIO_RECORDING_FAILED,
-        message: error.message || 'Failed to stop recording',
-        details: error,
-      });
+      setError({ type: ErrorType.AUDIO_RECORDING_FAILED, message: error?.message || 'Failed to stop recording', details: error });
       setIsRecording(false);
+      if (viaHotkeyRef.current) window.electronAPI.setOverlayState({ kind: 'error', label: t.errorCopy[ErrorType.AUDIO_RECORDING_FAILED].status });
     }
-  }, [audioRecorder, recordingDuration, setIsRecording, setError, onRecordingComplete]);
+  }, [audioRecorder, setIsRecording, setError, onRecordingComplete, t]);
 
-  const formatDuration = (seconds: number): string => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
+  // a tap of the trigger key in any app: start, or stop and transcribe (ignored while still transcribing)
+  useEffect(() => window.electronAPI.onHotkeyToggle(() => {
+    if (isRecording) stop();
+    else if (!isProcessing) start(true);
+  }), [isRecording, isProcessing, start, stop]);
+
+  const chips = triggerKey !== 'off' ? [TRIGGER_LABEL[triggerKey]] : [];
 
   return (
-    <div className="flex flex-col items-center space-y-4">
-      {/* Recording button */}
-      <button
-        onClick={isRecording ? handleStopRecording : handleStartRecording}
-        disabled={isProcessing}
-        className={`
-          relative w-20 h-20 rounded-full flex items-center justify-center
-          transition-all duration-300 transform hover:scale-105
-          disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100
-          ${isRecording 
-            ? 'bg-red-600 hover:bg-red-700 animate-recording-pulse' 
-            : 'bg-blue-600 hover:bg-blue-700'
-          }
-          ${isProcessing ? 'animate-pulse' : ''}
-        `}
-        aria-label={isRecording ? 'Stop recording' : 'Start recording'}
-      >
-        {isProcessing ? (
-          // Loading spinner
-          <svg
-            className="animate-spin h-8 w-8 text-white"
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 24 24"
-          >
-            <circle
-              className="opacity-25"
-              cx="12"
-              cy="12"
-              r="10"
-              stroke="currentColor"
-              strokeWidth="4"
-            />
-            <path
-              className="opacity-75"
-              fill="currentColor"
-              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-            />
-          </svg>
-        ) : isRecording ? (
-          // Stop icon
-          <div className="w-6 h-6 bg-white rounded-sm" />
-        ) : (
-          // Microphone icon
-          <svg
-            className="w-8 h-8 text-white"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-            xmlns="http://www.w3.org/2000/svg"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"
-            />
-          </svg>
-        )}
-        
-        {/* Pulsating animation ring when recording */}
+    <div className="flex shrink-0 flex-col items-center gap-3 pt-2">
+      <div className="relative grid h-[84px] w-[84px] place-items-center">
+        {/* the voice ring */}
         {isRecording && (
-          <span className="absolute inset-0 rounded-full bg-red-600 animate-ping opacity-75" />
+          <>
+            <span
+              ref={ringRef}
+              aria-hidden="true"
+              className="absolute inset-0 rounded-full bg-ink/10 transition-transform duration-75"
+              style={{ transform: 'scale(calc(1 + var(--level, 0) * 0.32))' }}
+            />
+            <span aria-hidden="true" className="absolute inset-0 rounded-full ring-2 ring-ink/15 animate-breathe" />
+          </>
         )}
-      </button>
+        {/* the working arc */}
+        {isProcessing && (
+          <svg aria-hidden="true" className="absolute -inset-1 animate-orbit text-ink/70" viewBox="0 0 92 92" fill="none">
+            <circle cx="46" cy="46" r="43" stroke="currentColor" strokeOpacity="0.12" strokeWidth="2" />
+            <path d="M46 3a43 43 0 0137.24 21.5" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+          </svg>
+        )}
 
-      {/* Recording timer */}
-      {isRecording && (
-        <div className="flex items-center space-x-2 text-red-500 font-mono text-lg">
-          <span className="w-3 h-3 bg-red-500 rounded-full animate-pulse" />
-          <span>{formatDuration(recordingDuration)}</span>
-        </div>
-      )}
+        <button
+          onClick={() => (isRecording ? stop() : start(false))}
+          disabled={isProcessing}
+          aria-label={isRecording ? t.stopRecording : t.startRecording}
+          className={`relative grid h-[72px] w-[72px] place-items-center rounded-full transition-[transform,background-color,box-shadow] duration-500 ease-spring
+            hover:-translate-y-0.5 active:scale-95 disabled:cursor-wait disabled:hover:translate-y-0 ${
+            isRecording
+              ? 'bg-ink text-paper shadow-[0_20px_40px_-16px_rgba(0,0,0,0.75),inset_0_1px_0_rgba(255,255,255,0.18)]'
+              : 'text-ink shadow-[0_22px_40px_-18px_rgba(0,0,0,0.55),0_2px_4px_rgba(0,0,0,0.05),inset_0_1px_0_#fff,inset_0_-8px_16px_rgba(24,28,36,0.07)]'
+          }`}
+          style={isRecording ? undefined : { background: 'radial-gradient(circle at 34% 28%, #fff 0%, #f6f7f9 45%, #e3e6eb 100%)' }}
+        >
+          {isRecording ? (
+            <span className="h-5 w-5 rounded-[6px] bg-paper" />
+          ) : (
+            <svg className={`h-7 w-7 transition-opacity ${isProcessing ? 'opacity-30' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round">
+              <rect x="9" y="3" width="6" height="11" rx="3" />
+              <path d="M5.5 11a6.5 6.5 0 0013 0M12 17.5V21" />
+            </svg>
+          )}
+        </button>
+      </div>
 
-      {/* Status text */}
-      <div className="text-sm text-gray-400">
-        {isProcessing ? (
-          t.processing
-        ) : isRecording ? (
-          `${t.recording} - ${t.stopRecording} (Cmd+Shift+S)`
-        ) : (
-          `${t.startRecording} (Cmd+Shift+R)`
+      <div className="flex h-5 items-center gap-1.5 text-[11px] text-ink/45">
+        {isProcessing ? null : (
+          <>
+            <span>{isRecording ? t.stopRecording : t.startRecording}</span>
+            <span className="flex gap-0.5">
+              {chips.map((k, i) => <kbd key={i} className="kbd">{k}</kbd>)}
+            </span>
+          </>
         )}
       </div>
     </div>

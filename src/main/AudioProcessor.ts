@@ -1,7 +1,7 @@
 import { ErrorType } from '../shared/types.js';
 
 export class AudioProcessor {
-  // Maximum audio file size: 25MB (Whisper API limit is 25MB)
+  // Maximum audio file size: 25MB (transcription API limit is 25MB)
   private static readonly MAX_FILE_SIZE = 25 * 1024 * 1024;
 
   /**

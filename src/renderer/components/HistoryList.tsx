@@ -1,193 +1,115 @@
-import React, { useState, useRef, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import type { TranscriptionHistory } from '../../shared/types';
 import { useAppContext } from '../App';
 
 interface HistoryListProps {
   history: TranscriptionHistory[];
   onSelectItem: (item: TranscriptionHistory) => void;
+  onCopyItem: (item: TranscriptionHistory) => void;
   onClearHistory: () => void;
 }
 
-// Virtual scrolling configuration
-const ITEM_HEIGHT = 80; // Approximate height of each history item in pixels
-const VISIBLE_ITEMS = 5; // Number of items to render at once
-const BUFFER_ITEMS = 2; // Extra items to render above/below for smooth scrolling
-
-export const HistoryList: React.FC<HistoryListProps> = ({
-  history,
-  onSelectItem,
-  onClearHistory,
-}) => {
+// Past transcripts grouped by day, newest first: the time and length in monospace, the words under them.
+// Clicking one puts it back in the transcript; the copy button on its corner copies it without leaving.
+export const HistoryList: React.FC<HistoryListProps> = ({ history, onSelectItem, onCopyItem, onClearHistory }) => {
   const { t, uiLanguage } = useAppContext();
-  const [scrollTop, setScrollTop] = useState(0);
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const locale = uiLanguage === 'zh' ? 'zh-TW' : 'en-US';
+  const [confirming, setConfirming] = useState(false);
 
-  // Memoize formatting functions to avoid recreating on every render
-  const formatTimestamp = useMemo(() => (timestamp: number): string => {
-    const date = new Date(timestamp);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
+  // "clear" asks once more before it erases everything
+  useEffect(() => {
+    if (!confirming) return;
+    const id = setTimeout(() => setConfirming(false), 3000);
+    return () => clearTimeout(id);
+  }, [confirming]);
 
-    if (diffMins < 1) {
-      return t.timeAgo.justNow;
-    } else if (diffMins < 60) {
-      return `${diffMins} ${t.timeAgo.minutesAgo}`;
-    } else if (diffHours < 24) {
-      return `${diffHours} ${t.timeAgo.hoursAgo}`;
-    } else if (diffDays < 7) {
-      return `${diffDays} ${t.timeAgo.daysAgo}`;
-    } else {
-      return date.toLocaleDateString(uiLanguage === 'zh' ? 'zh-TW' : 'en-US', {
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-      });
+  const days = useMemo(() => {
+    const today = new Date().toDateString();
+    const yesterday = new Date(Date.now() - 86400000).toDateString();
+    const groups: { label: string; items: TranscriptionHistory[] }[] = [];
+    for (const item of history) {
+      const d = new Date(item.timestamp).toDateString();
+      const label = d === today ? (uiLanguage === 'zh' ? '今天' : 'Today')
+        : d === yesterday ? (uiLanguage === 'zh' ? '昨天' : 'Yesterday')
+        : new Date(item.timestamp).toLocaleDateString(locale, { month: 'short', day: 'numeric', weekday: 'short' });
+      const last = groups[groups.length - 1];
+      if (last?.label === label) last.items.push(item);
+      else groups.push({ label, items: [item] });
     }
-  }, [t, uiLanguage]);
+    return groups;
+  }, [history, uiLanguage, locale]);
 
-  const formatDuration = useMemo(() => (seconds: number): string => {
-    if (seconds < 60) {
-      return `${Math.round(seconds)}${uiLanguage === 'zh' ? '秒' : 's'}`;
-    }
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.round(seconds % 60);
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  }, [uiLanguage]);
-
-  const truncateText = useMemo(() => (text: string, maxLength: number = 60): string => {
-    if (text.length <= maxLength) {
-      return text;
-    }
-    return text.substring(0, maxLength) + '...';
-  }, []);
-
-  // Calculate visible items based on scroll position (virtual scrolling)
-  const visibleItems = useMemo(() => {
-    if (history.length === 0) return [];
-
-    const startIndex = Math.max(0, Math.floor(scrollTop / ITEM_HEIGHT) - BUFFER_ITEMS);
-    const endIndex = Math.min(
-      history.length,
-      Math.ceil((scrollTop + ITEM_HEIGHT * VISIBLE_ITEMS) / ITEM_HEIGHT) + BUFFER_ITEMS
-    );
-
-    return history.slice(startIndex, endIndex).map((item, index) => ({
-      item,
-      index: startIndex + index,
-    }));
-  }, [history, scrollTop]);
-
-  // Handle scroll event with throttling
-  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
-    setScrollTop(e.currentTarget.scrollTop);
-  };
-
-  // Calculate total height for virtual scrolling
-  const totalHeight = history.length * ITEM_HEIGHT;
+  const time = (ts: number) => new Date(ts).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', hour12: false });
+  const length = (s: number) => (s < 60 ? `${Math.max(1, Math.round(s))}s` : `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`);
 
   if (history.length === 0) {
     return (
-      <div className="text-center py-8 text-gray-500">
-        <svg
-          className="w-12 h-12 mx-auto mb-3 opacity-50"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-          />
-        </svg>
-        <p className="text-sm">{t.noHistory}</p>
+      <div className="flex flex-1 flex-col items-center justify-center text-center">
+        <span className="grid h-14 w-14 place-items-center rounded-full bg-paper text-ink/35 shadow-soft ring-1 ring-ink/[0.06]">
+          <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round">
+            <circle cx="12" cy="12" r="8.5" />
+            <path d="M12 7.5V12l3 2" />
+          </svg>
+        </span>
+        <p className="mt-4 text-sm text-ink/50">{t.noHistory}</p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-3">
-      {/* Header with clear button */}
-      <div className="flex items-center justify-between mb-2">
-        <h3 className="text-sm font-semibold text-gray-300">
-          {t.history} ({history.length})
-        </h3>
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex h-8 shrink-0 items-center justify-between px-1">
+        <span className="eyebrow">{t.history} · <span className="font-mono tracking-normal">{history.length}</span></span>
         <button
-          onClick={onClearHistory}
-          className="text-xs text-red-400 hover:text-red-300 transition-colors px-2 py-1 rounded hover:bg-red-900/20"
-          title={t.clearHistory}
+          onClick={() => (confirming ? (onClearHistory(), setConfirming(false)) : setConfirming(true))}
+          className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${
+            confirming ? 'bg-alert text-paper' : 'text-ink/45 hover:bg-ink/[0.06] hover:text-ink'
+          }`}
         >
-          {t.clearHistory}
+          {confirming ? t.clearHistoryConfirm : t.clearHistory}
         </button>
       </div>
 
-      {/* History list with virtual scrolling */}
-      <div 
-        ref={scrollContainerRef}
-        className="max-h-64 overflow-y-auto custom-scrollbar"
-        onScroll={handleScroll}
-      >
-        <div style={{ height: `${totalHeight}px`, position: 'relative' }}>
-          {visibleItems.map(({ item, index }) => (
-            <button
-              key={item.id}
-              onClick={() => onSelectItem(item)}
-              className="absolute w-full text-left p-3 rounded-lg bg-gray-700/30 hover:bg-gray-700/50 transition-all border border-gray-600/30 hover:border-gray-500/50 group"
-              style={{
-                top: `${index * ITEM_HEIGHT}px`,
-                height: `${ITEM_HEIGHT}px`,
-              }}
-            >
-              <div className="flex items-start justify-between gap-2 mb-1">
-                <span className="text-xs text-gray-400 flex items-center gap-1">
-                  <svg
-                    className="w-3 h-3"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-                    />
-                  </svg>
-                  {formatTimestamp(item.timestamp)}
-                </span>
-                <span className="text-xs text-gray-500 flex items-center gap-1">
-                  <svg
-                    className="w-3 h-3"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"
-                    />
-                  </svg>
-                  {formatDuration(item.duration)}
-                </span>
-              </div>
-              <p className="text-sm text-gray-200 group-hover:text-white transition-colors line-clamp-2">
-                {truncateText(item.text)}
-              </p>
-              <div className="flex items-center gap-2 mt-1">
-                <span className="text-xs text-gray-500 px-1.5 py-0.5 rounded bg-gray-600/30">
-                  {item.language === 'zh' ? t.chinese : t.english}
-                </span>
-              </div>
-            </button>
-          ))}
-        </div>
+      <div className="thin-scroll -mx-4 min-h-0 flex-1 overflow-y-auto px-4 pb-2 pt-1">
+        {days.map(day => (
+          <section key={day.label} className="mb-4">
+            <h3 className="mb-2 px-1 font-mono text-[11px] text-ink/40">{day.label}</h3>
+            <ul className="space-y-2">
+              {day.items.map((item, i) => (
+                <li key={item.id} className="animate-rise" style={{ animationDelay: `${Math.min(i, 8) * 25}ms` }}>
+                  <div className="group relative">
+                    <button
+                      onClick={() => onSelectItem(item)}
+                      title={t.useThis}
+                      className="block w-full rounded-[18px] bg-paper p-3.5 pr-11 text-left ring-1 ring-ink/[0.06] shadow-[0_10px_24px_-18px_rgba(0,0,0,0.5)]
+                        transition-[transform,box-shadow] duration-300 ease-spring hover:-translate-y-0.5 hover:shadow-[0_18px_34px_-18px_rgba(0,0,0,0.55)]"
+                    >
+                      <span className="flex items-center gap-2 font-mono text-[10.5px] tabular-nums text-ink/40">
+                        {time(item.timestamp)}
+                        <span className="h-0.5 w-0.5 rounded-full bg-ink/30" />
+                        {length(item.duration)}
+                        <span className="h-0.5 w-0.5 rounded-full bg-ink/30" />
+                        {item.language && item.language !== 'auto' ? item.language.toUpperCase() : '—'}
+                      </span>
+                      <span className="mt-1.5 line-clamp-3 block text-[13px] leading-relaxed text-ink/85">{item.text}</span>
+                    </button>
+                    <button
+                      onClick={() => onCopyItem(item)}
+                      aria-label={t.copy}
+                      title={t.copy}
+                      className="icon-btn absolute right-2 top-2 h-7 w-7 opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100"
+                    >
+                      <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="8" y="8" width="12" height="12" rx="3" />
+                        <path d="M16 8V6a2 2 0 00-2-2H6a2 2 0 00-2 2v8a2 2 0 002 2h2" />
+                      </svg>
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ))}
       </div>
     </div>
   );

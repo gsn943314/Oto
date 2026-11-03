@@ -13,9 +13,22 @@ const IPC_CHANNELS = {
   MINIMIZE_WINDOW: 'minimize-window',
   CLOSE_WINDOW: 'close-window',
   SET_WINDOW_OPACITY: 'set-window-opacity',
+  OPEN_EXTERNAL: 'open-external',
+  HOTKEY_TOGGLE: 'hotkey-toggle',
+  SHOW_WINDOW: 'show-window',
+  OVERLAY_STATE: 'overlay-state',
+  DELIVER_TEXT: 'deliver-text',
+  ACCESSIBILITY_STATUS: 'accessibility-status',
+  ACCESSIBILITY_REQUEST: 'accessibility-request',
+  ACCESSIBILITY_CHANGED: 'accessibility-changed',
 };
 
-console.log('[Preload] Exposing electronAPI...');
+// subscribe to a main-process message; returns the unsubscribe function
+const listen = (channel, callback) => {
+  const handler = (_event, value) => callback(value);
+  ipcRenderer.on(channel, handler);
+  return () => ipcRenderer.removeListener(channel, handler);
+};
 
 // Expose protected methods that allow the renderer process to use
 // the ipcRenderer without exposing the entire object
@@ -52,7 +65,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
   
   setWindowOpacity: (opacity) => 
     ipcRenderer.invoke(IPC_CHANNELS.SET_WINDOW_OPACITY, opacity),
-});
 
-console.log('[Preload] electronAPI exposed successfully!');
-console.log('[Preload] Available methods:', Object.keys(contextBridge));
+  openExternal: (url) =>
+    ipcRenderer.invoke(IPC_CHANNELS.OPEN_EXTERNAL, url),
+
+  // dictation from any app
+  onHotkeyToggle: (callback) => listen(IPC_CHANNELS.HOTKEY_TOGGLE, callback),
+  showWindow: () => ipcRenderer.send(IPC_CHANNELS.SHOW_WINDOW),
+  setOverlayState: (state) => ipcRenderer.send(IPC_CHANNELS.OVERLAY_STATE, state),
+  onOverlayState: (callback) => listen(IPC_CHANNELS.OVERLAY_STATE, callback),
+  deliverText: (text) => ipcRenderer.invoke(IPC_CHANNELS.DELIVER_TEXT, text),
+  getAccessibilityStatus: () => ipcRenderer.invoke(IPC_CHANNELS.ACCESSIBILITY_STATUS),
+  requestAccessibility: () => ipcRenderer.invoke(IPC_CHANNELS.ACCESSIBILITY_REQUEST),
+  onAccessibilityChange: (callback) => listen(IPC_CHANNELS.ACCESSIBILITY_CHANGED, callback),
+});

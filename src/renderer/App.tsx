@@ -1,19 +1,21 @@
 /// <reference path="./electron.d.ts" />
 import React, { createContext, useContext, useState, useCallback, useRef, useEffect } from 'react';
-import type { TranscriptionHistory, AppError, TranscriptionResponse } from '../shared/types';
+import type { TranscriptionHistory, AppError, TranscriptionResponse, AppSettings, OverlayState } from '../shared/types';
+import { ErrorType } from '../shared/types';
+import { EXTERNAL_LINKS } from '../shared/constants';
+import { AUTO_LANGUAGE } from '../shared/languages';
 import { AudioRecorder } from './services/AudioRecorder';
 import { RecordingControl } from './components/RecordingControl';
 import { TextDisplay } from './components/TextDisplay';
 import { StatusIndicator } from './components/StatusIndicator';
 import { HistoryList } from './components/HistoryList';
 import { Settings } from './components/Settings';
-import ErrorDisplay from './components/ErrorDisplay';
-import { ErrorType } from '../shared/types';
+import ErrorDisplay, { type NoticeAction } from './components/ErrorDisplay';
+import { Toast } from './components/Toast';
+import { TitleBar, type View } from './components/TitleBar';
 import { errorHandler } from '../shared/errorHandler';
-import type { AppSettings } from '../shared/types';
 import { getTranslations, type Language, type Translations } from '../shared/i18n';
 
-// Define AppState interface
 export interface AppState {
   isRecording: boolean;
   isProcessing: boolean;
@@ -25,7 +27,6 @@ export interface AppState {
   t: Translations;
 }
 
-// Define context actions
 interface AppContextValue extends AppState {
   setIsRecording: (value: boolean) => void;
   setIsProcessing: (value: boolean) => void;
@@ -37,10 +38,8 @@ interface AppContextValue extends AppState {
   setUILanguage: (language: Language) => void;
 }
 
-// Create context
 const AppContext = createContext<AppContextValue | undefined>(undefined);
 
-// Custom hook to use app context
 export const useAppContext = () => {
   const context = useContext(AppContext);
   if (!context) {
@@ -49,8 +48,13 @@ export const useAppContext = () => {
   return context;
 };
 
+// Failures where sending the same recording again can work
+const RETRYABLE = new Set([
+  ErrorType.INSUFFICIENT_QUOTA, ErrorType.RATE_LIMITED, ErrorType.TIMEOUT,
+  ErrorType.NETWORK_ERROR, ErrorType.API_REQUEST_FAILED, ErrorType.UNKNOWN_ERROR,
+]);
+
 const App: React.FC = () => {
-  // Global state management
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [transcribedText, setTranscribedText] = useState('');
@@ -59,233 +63,167 @@ const App: React.FC = () => {
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [settings, setSettings] = useState<AppSettings | null>(null);
-  
-  // Toast notification state
-  const [showToast, setShowToast] = useState(false);
-  const [toastMessage, setToastMessage] = useState('');
-  
-  // UI Language state
-  const [uiLanguage, setUILanguage] = useState<Language>('zh');
+  const [view, setView] = useState<View>('transcribe');
+  const [toast, setToast] = useState<string | null>(null);
+  const [trusted, setTrusted] = useState<boolean | null>(null);
+  const [granting, setGranting] = useState(false);
+
+  // the interface is English for now (the Chinese strings stay in i18n for later)
+  const [uiLanguage, setUILanguage] = useState<Language>('en');
   const t = getTranslations(uiLanguage);
+  useEffect(() => { document.documentElement.lang = uiLanguage === 'zh' ? 'zh-TW' : 'en'; }, [uiLanguage]);
 
-  // Audio recorder instance
   const audioRecorderRef = useRef<AudioRecorder>(new AudioRecorder());
+  // the last recording that didn't make it through, so it can be sent again (after a top-up, say)
+  const pendingAudioRef = useRef<{ blob: Blob; duration: number } | null>(null);
+  const historyLoadedRef = useRef(false);
 
-  // Cleanup audio recorder on unmount
   useEffect(() => {
-    return () => {
-      if (audioRecorderRef.current) {
-        audioRecorderRef.current.dispose();
-      }
-    };
+    const recorder = audioRecorderRef.current;
+    return () => recorder.dispose();
   }, []);
 
-  // Load history on mount
   useEffect(() => {
-    const loadHistory = async () => {
-      try {
-        const loadedHistory = await window.electronAPI.loadHistory();
-        setHistory(loadedHistory);
-      } catch (error) {
-        console.error('Failed to load history:', error);
-      }
-    };
+    window.electronAPI.loadHistory()
+      .then(setHistory)
+      .catch(err => console.error('Failed to load history:', err))
+      .finally(() => { historyLoadedRef.current = true; });
 
-    const loadSettings = async () => {
-      try {
-        const loadedSettings = await window.electronAPI.loadSettings();
-        setSettings(loadedSettings);
-        // 設定 UI 語言
-        if (loadedSettings.uiLanguage) {
-          setUILanguage(loadedSettings.uiLanguage);
-        }
-      } catch (error) {
-        console.error('Failed to load settings:', error);
-      }
-    };
-
-    loadHistory();
-    loadSettings();
+    window.electronAPI.loadSettings()
+      .then(loaded => {
+        setSettings(loaded);
+      })
+      .catch(err => console.error('Failed to load settings:', err));
   }, []);
 
-  // Save history when it changes
+  // dictating from other apps needs Accessibility permission; the window says so until it's granted
   useEffect(() => {
-    const saveHistory = async () => {
-      try {
-        await window.electronAPI.saveHistory(history);
-      } catch (error) {
-        console.error('Failed to save history:', error);
-      }
-    };
+    window.electronAPI.getAccessibilityStatus().then(setTrusted).catch(() => {});
+    return window.electronAPI.onAccessibilityChange(setTrusted);
+  }, []);
 
-    // Only save if history is not empty (avoid saving on initial load)
-    if (history.length > 0) {
-      saveHistory();
-    }
+  // keep the history on disk (not before it has been read, or the saved one would be overwritten)
+  useEffect(() => {
+    if (!historyLoadedRef.current) return;
+    window.electronAPI.saveHistory(history).catch(err => console.error('Failed to save history:', err));
   }, [history]);
 
-  // Add to history with limit
+  const historyLimit = settings?.historyLimit ?? 50;
   const addToHistory = useCallback((item: TranscriptionHistory) => {
-    setHistory(prev => {
-      const newHistory = [item, ...prev];
-      // Limit history to 50 items (from DEFAULT_SETTINGS)
-      return newHistory.slice(0, 50);
-    });
-  }, []);
+    setHistory(prev => [item, ...prev].slice(0, historyLimit));
+  }, [historyLimit]);
 
-  // Global keyboard shortcuts for copy and clear
-  useEffect(() => {
-    const handleGlobalKeyPress = async (event: KeyboardEvent) => {
-      if (!settings) return;
+  const showToast = useCallback((message: string) => setToast(message), []);
 
-      const isModifier = (event.metaKey || event.ctrlKey);
-      
-      // Copy text shortcut
-      if (isModifier && event.shiftKey && event.key.toUpperCase() === 'C') {
-        event.preventDefault();
-        if (transcribedText) {
-          try {
-            await window.electronAPI.copyToClipboard(transcribedText);
-          } catch (error) {
-            console.error('Failed to copy:', error);
-          }
-        }
-      }
-      
-      // Clear text shortcut
-      if (isModifier && event.shiftKey && event.key.toUpperCase() === 'X') {
-        event.preventDefault();
-        setTranscribedText('');
-      }
-    };
+  const copyText = useCallback(async (text: string) => {
+    if (!text) return;
+    try {
+      await window.electronAPI.copyToClipboard(text);
+      showToast(t.copied);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
+  }, [showToast, t]);
 
-    window.addEventListener('keydown', handleGlobalKeyPress);
-    return () => {
-      window.removeEventListener('keydown', handleGlobalKeyPress);
-    };
-  }, [settings, transcribedText, setTranscribedText]);
-
-  // Clear history
   const clearHistory = useCallback(async () => {
     try {
       await window.electronAPI.clearHistory();
       setHistory([]);
-    } catch (error) {
-      console.error('Failed to clear history:', error);
+    } catch (err) {
+      console.error('Failed to clear history:', err);
     }
   }, []);
 
-  // Handle recording complete
-  const handleRecordingComplete = useCallback(async (audioBlob: Blob, duration: number) => {
+  const transcribe = useCallback(async (audioBlob: Blob, duration: number, viaHotkey = false) => {
+    const overlay = (state: OverlayState) => { if (viaHotkey) window.electronAPI.setOverlayState(state); };
+    overlay({ kind: 'thinking' });
     setIsProcessing(true);
     setError(null);
+    setView('transcribe');
+    pendingAudioRef.current = { blob: audioBlob, duration };
 
     try {
-      // Convert Blob to Uint8Array (works in browser)
-      const arrayBuffer = await audioBlob.arrayBuffer();
-      const uint8Array = new Uint8Array(arrayBuffer);
-      // Convert to regular array for IPC transfer
-      const audioData = Array.from(uint8Array);
-
-      // Call Electron API to transcribe
+      const audioData = Array.from(new Uint8Array(await audioBlob.arrayBuffer()));
+      const chosen = settings?.dictationLanguage || AUTO_LANGUAGE;
       const response: TranscriptionResponse = await window.electronAPI.transcribeAudio({
         audioBlob: audioData,
-        language: settings?.defaultLanguage || 'zh',
+        language: chosen === AUTO_LANGUAGE ? undefined : chosen,
       });
+      const language = response.language ?? chosen;
 
       if (response.success && response.text) {
-        // 累積文字而不是覆蓋
-        setTranscribedText(prev => {
-          // 如果之前有文字，加上換行符號
-          if (prev && prev.trim().length > 0) {
-            return prev + '\n' + response.text;
-          }
-          return response.text;
-        });
-        
-        // Add to history
-        const historyItem: TranscriptionHistory = {
-          id: Date.now().toString(),
-          text: response.text,
-          timestamp: Date.now(),
-          language: settings?.defaultLanguage || 'zh',
-          duration,
-        };
-        addToHistory(historyItem);
+        pendingAudioRef.current = null;
+        setTranscribedText(response.text); // a new recording replaces the last one
+        addToHistory({ id: Date.now().toString(), text: response.text, timestamp: Date.now(), language, duration });
+
+        // onto the clipboard, and into the field the cursor is in (unless that's this window)
+        const { result, app } = await window.electronAPI.deliverText(response.text);
+        if (result === 'pasted') {
+          overlay({ kind: 'pasted', app });
+          showToast(t.delivered.pasted.replace('{app}', app || '…'));
+        } else {
+          overlay(result === 'ownWindow' ? { kind: 'hidden' } : { kind: 'copied' });
+          showToast(t.delivered.copied);
+        }
+      } else if (response.success) {
+        pendingAudioRef.current = null; // silence: nothing to add, nothing to retry
+        overlay({ kind: 'hidden' });
       } else {
-        // Handle API error response
-        const apiError = errorHandler.createError(
-          ErrorType.API_REQUEST_FAILED,
-          response.error || 'Transcription failed'
-        );
-        setError(apiError);
+        const type = response.errorType ?? ErrorType.API_REQUEST_FAILED;
+        setError(errorHandler.createError(type, response.error || 'Transcription failed'));
+        overlay({ kind: 'error', label: t.errorCopy[type]?.status ?? t.status.error });
+        // the window is where the explanation and the buttons are
+        if (viaHotkey) window.electronAPI.showWindow();
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error('Transcription error:', err);
-      const appError = errorHandler.handleUnknownError(err);
-      setError(appError);
+      setError(errorHandler.handleUnknownError(err));
+      overlay({ kind: 'error', label: t.status.error });
     } finally {
       setIsProcessing(false);
     }
-  }, [addToHistory, settings]);
+  }, [addToHistory, settings, showToast, t]);
 
-  // Handle copy
-  const handleCopy = useCallback((text: string) => {
-    console.log('Text copied:', text);
-    // Show toast notification
-    setToastMessage(t.uiLanguage === 'zh' ? '已複製到剪貼簿' : 'Copied to clipboard');
-    setShowToast(true);
-    setTimeout(() => setShowToast(false), 2000);
-  }, [t]);
-
-  // Handle history item selection
   const handleSelectHistoryItem = useCallback((item: TranscriptionHistory) => {
     setTranscribedText(item.text);
+    setView('transcribe');
   }, []);
 
-  // Handle settings save
   const handleSaveSettings = useCallback(async (newSettings: AppSettings) => {
     try {
       await window.electronAPI.saveSettings(newSettings);
       setSettings(newSettings);
-      
-      // 更新 UI 語言
-      if (newSettings.uiLanguage) {
-        setUILanguage(newSettings.uiLanguage);
-      }
-      
-      // Apply window opacity immediately
-      if (newSettings.windowOpacity !== settings?.windowOpacity) {
-        // Note: Window opacity would be handled by main process
-        // This is just updating the local state
-      }
-      
-      // Trigger settings update event for other components
       window.dispatchEvent(new CustomEvent('settings-updated', { detail: newSettings }));
     } catch (err) {
       console.error('Failed to save settings:', err);
-      const appError = errorHandler.handleUnknownError(err);
-      setError(appError);
+      setError(errorHandler.handleUnknownError(err));
       throw err;
     }
-  }, [settings]);
-
-  // Handle error retry
-  const handleErrorRetry = useCallback(() => {
-    if (error?.type === ErrorType.API_KEY_INVALID) {
-      // Open settings to configure API key
-      setIsSettingsOpen(true);
-    }
-    // Clear error to allow retry
-    setError(null);
-  }, [error]);
-
-  // Handle error dismiss
-  const handleErrorDismiss = useCallback(() => {
-    setError(null);
   }, []);
 
-  // Context value
+  // what the notice offers for each kind of failure
+  const noticeActions = (err: AppError): NoticeAction[] => {
+    const actions: NoticeAction[] = [];
+    const pending = pendingAudioRef.current;
+    const retry = pending && RETRYABLE.has(err.type)
+      ? { label: t.actions.retry, onClick: () => transcribe(pending.blob, pending.duration) }
+      : null;
+
+    switch (err.type) {
+      case ErrorType.INSUFFICIENT_QUOTA:
+        actions.push({ label: t.actions.topUp, primary: true, onClick: () => window.electronAPI.openExternal(EXTERNAL_LINKS.OPENAI_BILLING) });
+        break;
+      case ErrorType.API_KEY_INVALID:
+        actions.push({ label: t.actions.openSettings, primary: true, onClick: () => { setError(null); setIsSettingsOpen(true); } });
+        break;
+      case ErrorType.MICROPHONE_ACCESS_DENIED:
+        actions.push({ label: t.actions.openSystemSettings, primary: true, onClick: () => window.electronAPI.openSystemPreferences() });
+        break;
+    }
+    if (retry) actions.push({ ...retry, primary: actions.length === 0 });
+    return actions;
+  };
+
   const contextValue: AppContextValue = {
     isRecording,
     isProcessing,
@@ -307,117 +245,53 @@ const App: React.FC = () => {
 
   return (
     <AppContext.Provider value={contextValue}>
-      {/* Toast Notification */}
-      {showToast && (
-        <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 animate-slide-down">
-          <div className="bg-green-600 text-white px-6 py-3 rounded-lg shadow-lg flex items-center gap-2">
-            <svg
-              className="w-5 h-5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M5 13l4 4L19 7"
-              />
-            </svg>
-            <span className="font-medium">{toastMessage}</span>
-          </div>
-        </div>
-      )}
-      
-      <div className="h-screen flex flex-col bg-gradient-to-br from-gray-900 to-gray-800 text-white overflow-hidden">
-        {/* Custom Title Bar */}
-        <div 
-          className="flex items-center justify-between px-4 py-3 bg-gray-900/80 backdrop-blur-sm border-b border-gray-700/50"
-          style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
-        >
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1.5">
-              <div className="w-3 h-3 rounded-full bg-red-500 hover:bg-red-600 cursor-pointer transition-colors" 
-                   style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-                   onClick={() => window.electronAPI?.closeWindow?.()}
-                   title={t.uiLanguage === 'zh' ? '關閉' : 'Close'}
-              />
-              <div className="w-3 h-3 rounded-full bg-yellow-500 hover:bg-yellow-600 cursor-pointer transition-colors"
-                   style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-                   onClick={() => window.electronAPI?.minimizeWindow?.()}
-                   title={t.uiLanguage === 'zh' ? '最小化' : 'Minimize'}
-              />
-              <div className="w-3 h-3 rounded-full bg-green-500 hover:bg-green-600 cursor-pointer transition-colors"
-                   style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-                   title={t.uiLanguage === 'zh' ? '全螢幕' : 'Fullscreen'}
-              />
-            </div>
-            <span className="text-sm font-medium text-gray-300 ml-2">{t.appTitle}</span>
-          </div>
-          <div className="text-xs text-gray-500">{t.uiLanguage === 'zh' ? '語音轉文字助手' : 'Voice to Text Assistant'}</div>
-        </div>
-
-        {/* Error Display */}
-        <ErrorDisplay
-          error={error}
-          onRetry={handleErrorRetry}
-          onDismiss={handleErrorDismiss}
-          autoHideDuration={0} // Don't auto-hide errors
+      <div className="flex h-screen flex-col">
+        <TitleBar
+          view={view}
+          onViewChange={setView}
+          historyCount={history.length}
+          onOpenSettings={() => setIsSettingsOpen(true)}
         />
 
-        {/* Main Content Area */}
-        <div className="flex-1 overflow-y-auto custom-scrollbar p-6">
-          <div className="max-w-2xl mx-auto space-y-4">
+        {view === 'transcribe' ? (
+          <main key="transcribe" className="flex min-h-0 flex-1 flex-col gap-3 px-4 pb-4 animate-fade">
+            <StatusIndicator language={settings?.dictationLanguage ?? AUTO_LANGUAGE} />
+            {error ? (
+              <ErrorDisplay error={error} actions={noticeActions(error)} onDismiss={() => setError(null)} />
+            ) : trusted === false && settings?.triggerKey !== 'off' ? (
+              <section className="card flex shrink-0 items-center gap-3 p-3.5 pl-4 animate-rise">
+                <p className="min-w-0 flex-1 text-[12.5px] leading-relaxed text-ink/65">{granting ? t.anywhere.granting : t.anywhere.permissionMissing}</p>
+                {!granting && (
+                  <button onClick={() => { setGranting(true); window.electronAPI.requestAccessibility(); }} className="pill-solid shrink-0 !px-3 !py-1.5 !text-xs">
+                    {t.anywhere.grant}
+                  </button>
+                )}
+              </section>
+            ) : null}
+            <TextDisplay onCopy={copyText} />
+            <RecordingControl
+              audioRecorder={audioRecorderRef.current}
+              onRecordingComplete={transcribe}
+              triggerKey={settings?.triggerKey ?? 'control'}
+            />
+          </main>
+        ) : (
+          <main key="history" className="flex min-h-0 flex-1 flex-col px-4 pb-4 animate-fade">
+            <HistoryList
+              history={history}
+              onSelectItem={handleSelectHistoryItem}
+              onCopyItem={item => copyText(item.text)}
+              onClearHistory={clearHistory}
+            />
+          </main>
+        )}
 
-            {/* Recording Control */}
-            <div className="bg-gray-800/50 backdrop-blur-md rounded-xl p-6 border border-gray-700/50 shadow-xl">
-              <RecordingControl
-                audioRecorder={audioRecorderRef.current}
-                onRecordingComplete={handleRecordingComplete}
-              />
-            </div>
-
-            {/* Text Display */}
-            <div className="bg-gray-800/50 backdrop-blur-md rounded-xl p-6 border border-gray-700/50 shadow-xl">
-              <TextDisplay onCopy={handleCopy} />
-            </div>
-
-            {/* Action Buttons */}
-            <div className="flex justify-center gap-3">
-              <button
-                onClick={() => setIsSettingsOpen(true)}
-                className="flex items-center gap-2 px-5 py-2.5 bg-gray-700/80 hover:bg-gray-600/80 backdrop-blur-sm rounded-lg transition-all duration-200 hover:scale-105 shadow-lg"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-                {t.settings}
-              </button>
-            </div>
-
-            {/* History List */}
-            {history.length > 0 && (
-              <div className="bg-gray-800/50 backdrop-blur-md rounded-xl p-6 border border-gray-700/50 shadow-xl">
-                <HistoryList
-                  history={history}
-                  onSelectItem={handleSelectHistoryItem}
-                  onClearHistory={clearHistory}
-                />
-              </div>
-            )}
-
-            {/* Status Indicator */}
-            <StatusIndicator />
-          </div>
-        </div>
-
-        {/* Settings Modal */}
         <Settings
           isOpen={isSettingsOpen}
           onClose={() => setIsSettingsOpen(false)}
           onSave={handleSaveSettings}
         />
+        <Toast message={toast} onClose={() => setToast(null)} />
       </div>
     </AppContext.Provider>
   );

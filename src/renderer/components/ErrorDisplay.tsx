@@ -1,138 +1,76 @@
-import React, { useEffect, useState } from 'react';
-import { AppError } from '../../shared/types';
-import { errorHandler } from '../../shared/errorHandler';
+import React from 'react';
+import type { AppError } from '../../shared/types';
+import { ErrorType } from '../../shared/types';
+import { useAppContext } from '../App';
 
-interface ErrorDisplayProps {
-  error: AppError | null;
-  onRetry?: () => void;
-  onDismiss?: () => void;
-  autoHideDuration?: number; // in milliseconds, 0 means no auto-hide
+export interface NoticeAction {
+  label: string;
+  onClick: () => void;
+  primary?: boolean;
 }
 
-const ErrorDisplay: React.FC<ErrorDisplayProps> = ({
-  error,
-  onRetry,
-  onDismiss,
-  autoHideDuration = 5000
-}) => {
-  const [isVisible, setIsVisible] = useState(false);
+interface ErrorDisplayProps {
+  error: AppError;
+  actions: NoticeAction[];
+  onDismiss: () => void;
+}
 
-  useEffect(() => {
-    if (error) {
-      setIsVisible(true);
-
-      // Auto-hide after duration if specified
-      if (autoHideDuration > 0) {
-        const timer = setTimeout(() => {
-          setIsVisible(false);
-          if (onDismiss) {
-            onDismiss();
-          }
-        }, autoHideDuration);
-
-        return () => clearTimeout(timer);
-      }
-    } else {
-      setIsVisible(false);
-    }
-  }, [error, autoHideDuration, onDismiss]);
-
-  if (!error || !isVisible) {
-    return null;
-  }
-
-  const userMessage = errorHandler.getUserMessage(error);
-  const suggestedAction = errorHandler.getSuggestedAction(error);
-
-  const handleAction = () => {
-    if (suggestedAction === '重試' && onRetry) {
-      onRetry();
-    } else if (suggestedAction === '設定 API 金鑰') {
-      // This will be handled by parent component to open settings
-      if (onRetry) {
-        onRetry();
-      }
-    } else if (suggestedAction === '前往系統設定') {
-      // Open system preferences (macOS specific)
-      window.electron.openSystemPreferences();
-    }
-  };
-
-  const handleDismiss = () => {
-    setIsVisible(false);
-    if (onDismiss) {
-      onDismiss();
-    }
-  };
+// A failure, said plainly in the window rather than as a pop-up: what happened, what to do, and the button
+// that does it. The message OpenAI actually sent sits under "Details" for when the plain words aren't enough.
+const ErrorDisplay: React.FC<ErrorDisplayProps> = ({ error, actions, onDismiss }) => {
+  const { t, uiLanguage } = useAppContext();
+  const copy = t.errorCopy[error.type] ?? t.errorCopy[ErrorType.UNKNOWN_ERROR];
+  const money = error.type === ErrorType.INSUFFICIENT_QUOTA;
 
   return (
-    <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 animate-slide-down">
-      <div className="bg-red-50 border border-red-200 rounded-lg shadow-lg p-4 max-w-md">
-        <div className="flex items-start">
-          <div className="flex-shrink-0">
-            <svg
-              className="h-6 w-6 text-red-600"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-              />
+    <section role="alert" className="card relative shrink-0 p-4 !ring-alert/20 animate-rise">
+      <div className="flex items-start gap-3">
+        <span className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-full bg-alert/10 text-alert">
+          {money ? (
+            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="6" width="18" height="13" rx="3" />
+              <path d="M3 10h18M7 15h3" />
             </svg>
-          </div>
-          <div className="ml-3 flex-1">
-            <h3 className="text-sm font-medium text-red-800">錯誤</h3>
-            <p className="mt-1 text-sm text-red-700">{userMessage}</p>
-            {error.details && (
-              <details className="mt-2">
-                <summary className="text-xs text-red-600 cursor-pointer hover:text-red-800">
-                  詳細資訊
-                </summary>
-                <pre className="mt-1 text-xs text-red-600 overflow-auto max-h-20">
-                  {typeof error.details === 'string'
-                    ? error.details
-                    : JSON.stringify(error.details, null, 2)}
-                </pre>
-              </details>
-            )}
-            {suggestedAction && (
-              <div className="mt-3 flex gap-2">
-                <button
-                  onClick={handleAction}
-                  className="px-3 py-1 bg-red-600 text-white text-sm rounded hover:bg-red-700 transition-colors"
-                >
-                  {suggestedAction}
+          ) : (
+            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round">
+              <path d="M12 8v5M12 16.5v.01" />
+              <circle cx="12" cy="12" r="9" />
+            </svg>
+          )}
+        </span>
+        <div className="min-w-0 flex-1">
+          <h2 className="text-sm font-semibold leading-snug text-ink">{copy.title}</h2>
+          <p className="mt-1 text-[13px] leading-relaxed text-ink/65">{copy.body}</p>
+          {error.message && (
+            <details className="mt-1.5">
+              <summary className="cursor-pointer text-[11px] text-ink/40 hover:text-ink/60">
+                {uiLanguage === 'zh' ? '詳細資訊' : 'Details'}
+              </summary>
+              <p className="mt-1 select-text break-words font-mono text-[11px] leading-relaxed text-ink/50">{error.message}</p>
+            </details>
+          )}
+          {actions.length > 0 && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {actions.map(action => (
+                <button key={action.label} onClick={action.onClick} className={`${action.primary ? 'pill-solid' : 'pill-paper'} !px-3.5 !py-1.5 !text-xs`}>
+                  {action.label}
+                  {action.primary && money && (
+                    <svg className="h-3 w-3" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M4 2h6v6M10 2L3 9" />
+                    </svg>
+                  )}
                 </button>
-                <button
-                  onClick={handleDismiss}
-                  className="px-3 py-1 bg-white text-red-600 text-sm rounded border border-red-300 hover:bg-red-50 transition-colors"
-                >
-                  關閉
-                </button>
-              </div>
-            )}
-          </div>
-          {!suggestedAction && (
-            <button
-              onClick={handleDismiss}
-              className="ml-3 flex-shrink-0 text-red-400 hover:text-red-600"
-            >
-              <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                <path
-                  fillRule="evenodd"
-                  d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
-                  clipRule="evenodd"
-                />
-              </svg>
-            </button>
+              ))}
+            </div>
           )}
         </div>
+        <button onClick={onDismiss} aria-label={t.actions.dismiss} className="icon-btn -mr-1 -mt-1 h-7 w-7">
+          <svg className="h-3.5 w-3.5" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round">
+            <path d="M3 3l6 6M9 3L3 9" />
+          </svg>
+        </button>
       </div>
-    </div>
+    </section>
   );
 };
 

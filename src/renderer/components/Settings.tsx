@@ -1,434 +1,297 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import type { AppSettings } from '../../shared/types';
+import type { AppSettings, TriggerKey } from '../../shared/types';
+import { DEFAULT_SETTINGS, EXTERNAL_LINKS } from '../../shared/constants';
+import { AUTO_LANGUAGE, DICTATION_LANGUAGES } from '../../shared/languages';
 import { useAppContext } from '../App';
-import { ShortcutInput } from './ShortcutInput';
-
-// Debounce hook for performance optimization
-function useDebounce<T>(value: T, delay: number): T {
-  const [debouncedValue, setDebouncedValue] = useState<T>(value);
-
-  useEffect(() => {
-    const handler = setTimeout(() => {
-      setDebouncedValue(value);
-    }, delay);
-
-    return () => {
-      clearTimeout(handler);
-    };
-  }, [value, delay]);
-
-  return debouncedValue;
-}
 
 interface SettingsProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (settings: AppSettings) => void;
+  onSave: (settings: AppSettings) => Promise<void> | void;
 }
 
-export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, onSave }) => {
-  const { t, setUILanguage, uiLanguage } = useAppContext();
-  
-  const [settings, setSettings] = useState<AppSettings>({
-    apiKey: '',
-    defaultLanguage: 'zh',
-    uiLanguage: 'zh',
-    shortcuts: {
-      startRecording: 'CommandOrControl+Shift+R',
-      stopRecording: 'CommandOrControl+Shift+S',
-      copyText: 'CommandOrControl+Shift+C',
-      clearText: 'CommandOrControl+Shift+X',
-    },
-    windowOpacity: 0.95,
-    historyLimit: 50,
-  });
+// A two-way switch in the nav's language: the chosen side is a raised white knob
+function Segmented<T extends string>({ value, options, onChange }: { value: T; options: { value: T; label: string }[]; onChange: (v: T) => void }) {
+  const index = Math.max(0, options.findIndex(o => o.value === value));
+  return (
+    <div className="relative grid rounded-full bg-ink/[0.06] p-1" style={{ gridTemplateColumns: `repeat(${options.length}, 1fr)` }}>
+      <span
+        aria-hidden="true"
+        className="absolute bottom-1 top-1 rounded-full bg-paper shadow-knob ring-1 ring-ink/[0.06] transition-[left] duration-500 ease-spring"
+        style={{ width: `calc((100% - 0.5rem) / ${options.length})`, left: `calc(0.25rem + (100% - 0.5rem) / ${options.length} * ${index})` }}
+      />
+      {options.map(o => (
+        <button
+          key={o.value}
+          type="button"
+          onClick={() => onChange(o.value)}
+          aria-pressed={o.value === value}
+          className={`relative z-10 h-8 rounded-full text-[13px] font-medium transition-colors ${o.value === value ? 'text-ink' : 'text-ink/50 hover:text-ink/80'}`}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
 
+const Row: React.FC<{ label: string; hint?: React.ReactNode; error?: string; children: React.ReactNode }> = ({ label, hint, error, children }) => (
+  <div className="space-y-2">
+    <div className="text-[13px] font-medium text-ink/80">{label}</div>
+    {children}
+    {error ? <p className="text-xs text-alert">{error}</p> : hint ? <p className="text-xs text-ink/45">{hint}</p> : null}
+  </div>
+);
+
+export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, onSave }) => {
+  const { t, uiLanguage } = useAppContext();
+  const [settings, setSettings] = useState<AppSettings>({ ...DEFAULT_SETTINGS });
+  const [original, setOriginal] = useState<AppSettings | null>(null);
   const [showApiKey, setShowApiKey] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
-  
-  // Debounced settings for preview (e.g., opacity changes)
-  const debouncedOpacity = useDebounce(settings.windowOpacity, 300);
-  
-  // Track if settings have been modified
-  const [isModified, setIsModified] = useState(false);
-  
-  // Store original UI language for cancel
-  const [originalUILanguage, setOriginalUILanguage] = useState<'zh' | 'en'>('zh');
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [trusted, setTrusted] = useState<boolean | null>(null);
+  const [granting, setGranting] = useState(false);
 
-  // Load settings when component mounts or opens
+  // whether macOS lets Oto watch the trigger key and paste (it can change while the sheet is open)
   useEffect(() => {
-    if (isOpen) {
-      loadSettings();
-      setIsModified(false);
-      // Save original UI language
-      setOriginalUILanguage(uiLanguage);
-    }
-  }, [isOpen, uiLanguage]);
+    if (!isOpen) return;
+    window.electronAPI.getAccessibilityStatus().then(setTrusted).catch(() => setTrusted(null));
+    return window.electronAPI.onAccessibilityChange(setTrusted);
+  }, [isOpen]);
 
-  // Apply debounced opacity preview to window
   useEffect(() => {
-    if (isOpen && isModified && window.electronAPI) {
-      // This would communicate with main process to preview opacity
-      // For now, we just debounce the state update
-      // window.electronAPI.setWindowOpacity?.(debouncedOpacity);
-    }
-  }, [debouncedOpacity, isOpen, isModified]);
+    if (!isOpen) return;
+    setErrors({});
+    setShowApiKey(false);
+    window.electronAPI.loadSettings()
+      .then(loaded => { setSettings(loaded); setOriginal(loaded); })
+      .catch(err => console.error('Failed to load settings:', err));
+    // only when the sheet opens; the language preview below must not reload it
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
 
-  const loadSettings = async () => {
-    try {
-      const loadedSettings = await window.electronAPI.loadSettings();
-      setSettings(loadedSettings);
-    } catch (error) {
-      console.error('Failed to load settings:', error);
-    }
+  const update = useCallback(<K extends keyof AppSettings>(key: K, value: AppSettings[K]) => {
+    setSettings(prev => ({ ...prev, [key]: value }));
+    setErrors(prev => { const next = { ...prev }; delete next[key as string]; delete next.general; return next; });
+  }, []);
+
+  const validate = (s: AppSettings) => {
+    const e: Record<string, string> = {};
+    if (s.apiKey && !s.apiKey.startsWith('sk-')) e.apiKey = t.errors.apiKeyInvalid;
+    else if (s.apiKey && s.apiKey.length < 20) e.apiKey = t.errors.apiKeyTooShort;
+    if (s.historyLimit < 1 || s.historyLimit > 100) e.historyLimit = t.errors.historyLimitRange;
+    return e;
   };
 
   const handleSave = async () => {
-    // Validate settings
-    const errors = validateSettings(settings);
-    if (Object.keys(errors).length > 0) {
-      setValidationErrors(errors);
-      return;
-    }
-
+    const e = validate(settings);
+    if (Object.keys(e).length) { setErrors(e); return; }
     setIsSaving(true);
     try {
       await onSave(settings);
       onClose();
-    } catch (error) {
-      console.error('Failed to save settings:', error);
-      setValidationErrors({ general: 'Failed to save settings' });
+    } catch {
+      setErrors({ general: t.errors.saveFailed });
     } finally {
       setIsSaving(false);
     }
   };
 
+  // put back what was previewed (language, opacity) and leave
   const handleCancel = () => {
-    setValidationErrors({});
-    // Restore original UI language
-    setUILanguage(originalUILanguage);
+    if (original) {
+      window.electronAPI.setWindowOpacity?.(original.windowOpacity);
+    }
     onClose();
   };
 
-  const validateSettings = (settings: AppSettings): Record<string, string> => {
-    const errors: Record<string, string> = {};
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') handleCancel(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
 
-    // Validate API key format (OpenAI keys start with 'sk-' and have specific length)
-    if (settings.apiKey) {
-      if (!settings.apiKey.startsWith('sk-')) {
-        errors.apiKey = t.errors.apiKeyInvalid;
-      } else if (settings.apiKey.length < 20) {
-        errors.apiKey = t.errors.apiKeyTooShort;
-      }
-    }
-
-    // Validate shortcuts
-    if (!settings.shortcuts.startRecording) {
-      errors.startRecording = t.errors.shortcutRequired;
-    } else if (!isValidShortcut(settings.shortcuts.startRecording)) {
-      errors.startRecording = t.errors.shortcutInvalid;
-    }
-
-    if (!settings.shortcuts.stopRecording) {
-      errors.stopRecording = t.errors.shortcutRequired;
-    } else if (!isValidShortcut(settings.shortcuts.stopRecording)) {
-      errors.stopRecording = t.errors.shortcutInvalid;
-    }
-
-    // Check for shortcut conflicts
-    if (settings.shortcuts.startRecording && settings.shortcuts.stopRecording) {
-      if (settings.shortcuts.startRecording === settings.shortcuts.stopRecording) {
-        errors.shortcuts = t.errors.shortcutConflict;
-      }
-    }
-
-    // Validate window opacity
-    if (settings.windowOpacity < 0.5 || settings.windowOpacity > 1) {
-      errors.windowOpacity = t.errors.opacityRange;
-    }
-
-    // Validate history limit
-    if (settings.historyLimit < 1 || settings.historyLimit > 100) {
-      errors.historyLimit = t.errors.historyLimitRange;
-    }
-
-    return errors;
-  };
-
-  // Validate Electron shortcut format
-  const isValidShortcut = (shortcut: string): boolean => {
-    // Basic validation for Electron accelerator format
-    // Valid modifiers: Command, Cmd, Control, Ctrl, CommandOrControl, CmdOrCtrl, Alt, Option, AltGr, Shift, Super
-    // Valid keys: A-Z, 0-9, F1-F24, Plus, Space, Tab, etc.
-    const modifierPattern = /^(Command|Cmd|Control|Ctrl|CommandOrControl|CmdOrCtrl|Alt|Option|AltGr|Shift|Super)(\+(Command|Cmd|Control|Ctrl|CommandOrControl|CmdOrCtrl|Alt|Option|AltGr|Shift|Super))*\+[A-Z0-9]$/;
-    return modifierPattern.test(shortcut);
-  };
-
-  // Real-time validation on field change with debouncing
-  const handleApiKeyChange = useCallback((value: string) => {
-    setSettings(prev => ({ ...prev, apiKey: value }));
-    setIsModified(true);
-    
-    // Clear error when user starts typing
-    if (validationErrors.apiKey) {
-      setValidationErrors(prev => ({ ...prev, apiKey: '' }));
-    }
-  }, [validationErrors.apiKey]);
-
-  const handleShortcutChange = useCallback((field: 'startRecording' | 'stopRecording', value: string) => {
-    setSettings(prev => ({
-      ...prev,
-      shortcuts: { ...prev.shortcuts, [field]: value }
-    }));
-    setIsModified(true);
-    
-    // Clear related errors
-    setValidationErrors(prev => {
-      const newErrors = { ...prev };
-      delete newErrors[field];
-      delete newErrors.shortcuts;
-      
-      // Check for conflicts in real-time
-      const newShortcuts = { ...settings.shortcuts, [field]: value };
-      if (newShortcuts.startRecording && newShortcuts.stopRecording) {
-        if (newShortcuts.startRecording === newShortcuts.stopRecording) {
-          newErrors.shortcuts = '開始和停止錄音快捷鍵不能相同';
-        }
-      }
-      
-      return newErrors;
-    });
-  }, [settings.shortcuts]);
-
-  // Preview window opacity change with debouncing
-  const handleOpacityChange = useCallback((opacity: number) => {
-    setSettings(prev => ({ ...prev, windowOpacity: opacity }));
-    setIsModified(true);
-    
-    // 即時預覽透明度
-    if (window.electronAPI?.setWindowOpacity) {
-      window.electronAPI.setWindowOpacity(opacity);
-    }
-    
-    if (validationErrors.windowOpacity) {
-      setValidationErrors(prev => ({ ...prev, windowOpacity: '' }));
-    }
-  }, [validationErrors.windowOpacity]);
-
-  if (!isOpen) {
-    return null;
-  }
+  if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-gray-800 rounded-xl w-full max-w-md border border-gray-700 shadow-2xl flex flex-col max-h-[90vh]">
-        {/* Header */}
-        <div className="flex items-center justify-between p-6 pb-4 flex-shrink-0">
-          <h2 className="text-2xl font-bold">{t.settings}</h2>
-          <button
-            onClick={handleCancel}
-            className="text-gray-400 hover:text-white transition-colors"
-            aria-label={t.cancel}
-          >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+    <div className="fixed inset-0 z-40 flex flex-col">
+      <div className="absolute inset-0 bg-ink/25 backdrop-blur-[2px] animate-fade" onClick={handleCancel} />
+
+      <div role="dialog" aria-modal="true" aria-label={t.settings}
+        className="relative mx-2 mb-2 mt-14 flex min-h-0 flex-1 flex-col overflow-hidden rounded-[28px] bg-grout shadow-[0_-20px_60px_-24px_rgba(0,0,0,0.5)] ring-1 ring-white/60 animate-sheet">
+        <header className="flex h-14 shrink-0 items-center justify-between pl-6 pr-3">
+          <h2 className="text-[17px] font-semibold tracking-[-0.01em]">{t.settings}</h2>
+          <button onClick={handleCancel} className="icon-btn" aria-label={t.cancel}>
+            <svg className="h-4 w-4" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth={1.4} strokeLinecap="round">
+              <path d="M3 3l6 6M9 3L3 9" />
             </svg>
           </button>
-        </div>
+        </header>
 
-        {/* General Error */}
-        {validationErrors.general && (
-          <div className="mb-4 p-3 bg-red-500/20 border border-red-500 rounded-lg text-red-200 text-sm">
-            {validationErrors.general}
-          </div>
-        )}
+        <div className="thin-scroll min-h-0 flex-1 space-y-5 overflow-y-auto px-4 pb-4">
+          {errors.general && <p className="rounded-2xl bg-alert/10 px-4 py-2.5 text-sm text-alert">{errors.general}</p>}
 
-        {/* Settings Form - Scrollable */}
-        <div className="space-y-5 overflow-y-auto custom-scrollbar px-6 flex-1">
-          {/* API Key */}
-          <div>
-            <label className="block text-sm font-medium mb-2">
-              {t.openAIApiKey}
-            </label>
-            <div className="relative">
-              <input
-                type={showApiKey ? 'text' : 'password'}
-                value={settings.apiKey}
-                onChange={(e) => handleApiKeyChange(e.target.value)}
-                placeholder={t.apiKeyPlaceholder}
-                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 pr-10 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-              <button
-                type="button"
-                onClick={() => setShowApiKey(!showApiKey)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors"
-                aria-label={showApiKey ? 'Hide' : 'Show'}
-              >
-                {showApiKey ? (
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
-                  </svg>
-                ) : (
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                  </svg>
+          <section className="space-y-2">
+            <h3 className="eyebrow px-2">{t.anywhere.section}</h3>
+            <div className="card space-y-4 p-4">
+              <Row label={t.anywhere.trigger} hint={settings.triggerKey === 'fn' ? t.anywhere.fnHint : t.anywhere.triggerHint}>
+                <Segmented<TriggerKey>
+                  value={settings.triggerKey ?? 'control'}
+                  options={[
+                    { value: 'control', label: '⌃ Control' },
+                    { value: 'fn', label: 'fn' },
+                    { value: 'rightOption', label: t.anywhere.rightOption },
+                    { value: 'off', label: t.anywhere.off },
+                  ]}
+                  onChange={v => update('triggerKey', v)}
+                />
+              </Row>
+              <label className="flex cursor-pointer items-start justify-between gap-4">
+                <span>
+                  <span className="block text-[13px] font-medium text-ink/80">{t.anywhere.autoPaste}</span>
+                  <span className="mt-1 block text-xs leading-relaxed text-ink/45">{t.anywhere.autoPasteHint}</span>
+                </span>
+                <input type="checkbox" className="peer sr-only" checked={settings.autoPaste ?? true} onChange={e => update('autoPaste', e.target.checked)} />
+                <span aria-hidden="true" className="relative mt-0.5 h-6 w-10 shrink-0 rounded-full bg-ink/15 transition-colors duration-300 peer-checked:bg-ink
+                  after:absolute after:left-0.5 after:top-0.5 after:h-5 after:w-5 after:rounded-full after:bg-paper after:shadow-knob after:transition-transform after:duration-500 after:ease-spring peer-checked:after:translate-x-4" />
+              </label>
+              <label className="flex cursor-pointer items-start justify-between gap-4">
+                <span>
+                  <span className="block text-[13px] font-medium text-ink/80">{t.anywhere.pointerBadge}</span>
+                  <span className="mt-1 block text-xs leading-relaxed text-ink/45">{t.anywhere.pointerBadgeHint}</span>
+                </span>
+                <input type="checkbox" className="peer sr-only" checked={settings.pointerBadge ?? true} onChange={e => update('pointerBadge', e.target.checked)} />
+                <span aria-hidden="true" className="relative mt-0.5 h-6 w-10 shrink-0 rounded-full bg-ink/15 transition-colors duration-300 peer-checked:bg-ink
+                  after:absolute after:left-0.5 after:top-0.5 after:h-5 after:w-5 after:rounded-full after:bg-paper after:shadow-knob after:transition-transform after:duration-500 after:ease-spring peer-checked:after:translate-x-4" />
+              </label>
+              <div className={`flex items-center justify-between gap-3 rounded-2xl px-3.5 py-3 ${trusted === false ? 'bg-alert/[0.07]' : 'bg-ink/[0.04]'}`}>
+                <span className="min-w-0">
+                  <span className="flex items-center gap-2 text-[13px] font-medium text-ink/80">
+                    <span className={`h-1.5 w-1.5 rounded-full ${trusted ? 'bg-ink' : trusted === false ? 'bg-alert' : 'bg-ink/25'}`} />
+                    {t.anywhere.permission}
+                  </span>
+                  <span className="mt-0.5 block text-xs leading-relaxed text-ink/50">
+                    {trusted ? t.anywhere.permissionGranted : granting ? t.anywhere.granting : t.anywhere.permissionMissing}
+                  </span>
+                </span>
+                {trusted === false && !granting && (
+                  <button type="button" onClick={() => { setGranting(true); window.electronAPI.requestAccessibility(); }} className="pill-solid shrink-0 !px-3 !py-1.5 !text-xs">
+                    {t.anywhere.grant}
+                  </button>
                 )}
-              </button>
-            </div>
-            {validationErrors.apiKey && (
-              <p className="mt-1 text-sm text-red-400">{validationErrors.apiKey}</p>
-            )}
-            <p className="mt-1 text-xs text-gray-400">
-              {t.uiLanguage === 'zh' ? '從' : 'Get API key from'} <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">OpenAI {t.uiLanguage === 'zh' ? '平台' : 'Platform'}</a>
-            </p>
-          </div>
-
-          {/* Language Selection */}
-          <div>
-            <label className="block text-sm font-medium mb-2">
-              {t.defaultLanguage}
-            </label>
-            <select
-              value={settings.defaultLanguage}
-              onChange={(e) => setSettings({ ...settings, defaultLanguage: e.target.value as 'zh' | 'en' })}
-              className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              <option value="zh">{t.chinese}</option>
-              <option value="en">{t.english}</option>
-            </select>
-          </div>
-
-          {/* UI Language Selection */}
-          <div>
-            <label className="block text-sm font-medium mb-2">
-              {t.uiLanguage}
-            </label>
-            <select
-              value={settings.uiLanguage}
-              onChange={(e) => {
-                const newLang = e.target.value as 'zh' | 'en';
-                setSettings({ ...settings, uiLanguage: newLang });
-                // 即時預覽：立即切換 UI 語言
-                setUILanguage(newLang);
-              }}
-              className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              <option value="zh">{t.chinese}</option>
-              <option value="en">{t.english}</option>
-            </select>
-            <p className="mt-1 text-xs text-gray-400">
-              {t.uiLanguage === 'zh' ? '預覽模式：儲存後永久生效' : 'Preview mode: Save to apply permanently'}
-            </p>
-          </div>
-
-          {/* Window Opacity */}
-          <div>
-            <label className="block text-sm font-medium mb-2">
-              {t.windowOpacity}: {Math.round(settings.windowOpacity * 100)}%
-            </label>
-            <input
-              type="range"
-              min="50"
-              max="100"
-              step="5"
-              value={settings.windowOpacity * 100}
-              onChange={(e) => handleOpacityChange(parseInt(e.target.value) / 100)}
-              className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer slider"
-            />
-            {validationErrors.windowOpacity && (
-              <p className="mt-1 text-sm text-red-400">{validationErrors.windowOpacity}</p>
-            )}
-          </div>
-
-          {/* Shortcuts */}
-          <div>
-            <label className="block text-sm font-medium mb-2">
-              {t.keyboardShortcuts}
-            </label>
-            <div className="space-y-3">
-              <div>
-                <label className="block text-xs text-gray-400 mb-1">{t.startRecordingShortcut}</label>
-                <ShortcutInput
-                  value={settings.shortcuts.startRecording}
-                  onChange={(value) => handleShortcutChange('startRecording', value)}
-                  placeholder="CommandOrControl+Shift+R"
-                  error={validationErrors.startRecording}
-                />
-              </div>
-              <div>
-                <label className="block text-xs text-gray-400 mb-1">{t.stopRecordingShortcut}</label>
-                <ShortcutInput
-                  value={settings.shortcuts.stopRecording}
-                  onChange={(value) => handleShortcutChange('stopRecording', value)}
-                  placeholder="CommandOrControl+Shift+S"
-                  error={validationErrors.stopRecording}
-                />
-              </div>
-              <div>
-                <label className="block text-xs text-gray-400 mb-1">{t.copyTextShortcut}</label>
-                <ShortcutInput
-                  value={settings.shortcuts.copyText}
-                  onChange={(value) => handleShortcutChange('copyText', value)}
-                  placeholder="CommandOrControl+Shift+C"
-                  error={validationErrors.copyText}
-                />
-              </div>
-              <div>
-                <label className="block text-xs text-gray-400 mb-1">{t.clearTextShortcut}</label>
-                <ShortcutInput
-                  value={settings.shortcuts.clearText}
-                  onChange={(value) => handleShortcutChange('clearText', value)}
-                  placeholder="CommandOrControl+Shift+X"
-                  error={validationErrors.clearText}
-                />
               </div>
             </div>
-            {validationErrors.shortcuts && (
-              <p className="mt-1 text-sm text-red-400">{validationErrors.shortcuts}</p>
-            )}
-          </div>
+          </section>
 
-          {/* History Limit */}
-          <div>
-            <label className="block text-sm font-medium mb-2">
-              {t.historyLimit}
-            </label>
-            <input
-              type="number"
-              min="1"
-              max="100"
-              value={settings.historyLimit}
-              onChange={(e) => {
-                setSettings({ ...settings, historyLimit: parseInt(e.target.value) || 50 });
-                setValidationErrors({ ...validationErrors, historyLimit: '' });
-              }}
-              className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-            {validationErrors.historyLimit && (
-              <p className="mt-1 text-sm text-red-400">{validationErrors.historyLimit}</p>
-            )}
-          </div>
+          <section className="space-y-2">
+            <h3 className="eyebrow px-2">{t.sections.account}</h3>
+            <div className="card space-y-4 p-4">
+              <Row
+                label={t.openAIApiKey}
+                error={errors.apiKey}
+                hint={
+                  <button type="button" onClick={() => window.electronAPI.openExternal(EXTERNAL_LINKS.OPENAI_API_KEYS)} className="underline decoration-ink/20 underline-offset-2 hover:text-ink">
+                    {t.getApiKey} ↗
+                  </button>
+                }
+              >
+                <div className="relative">
+                  <input
+                    type={showApiKey ? 'text' : 'password'}
+                    value={settings.apiKey}
+                    onChange={e => update('apiKey', e.target.value.trim())}
+                    placeholder={t.apiKeyPlaceholder}
+                    spellCheck={false}
+                    className="field pr-11 font-mono text-[13px]"
+                  />
+                  <button type="button" onClick={() => setShowApiKey(v => !v)} className="icon-btn absolute right-1.5 top-1/2 h-7 w-7 -translate-y-1/2" aria-label={showApiKey ? 'Hide' : 'Show'}>
+                    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z" />
+                      <circle cx="12" cy="12" r="2.75" />
+                      {showApiKey && <path d="M4 20L20 4" />}
+                    </svg>
+                  </button>
+                </div>
+              </Row>
+              <div className="flex gap-2">
+                <button type="button" onClick={() => window.electronAPI.openExternal(EXTERNAL_LINKS.OPENAI_BILLING)} className="pill-paper flex-1 !py-1.5 !text-xs">
+                  {uiLanguage === 'zh' ? '餘額與儲值' : 'Balance'} ↗
+                </button>
+                <button type="button" onClick={() => window.electronAPI.openExternal(EXTERNAL_LINKS.OPENAI_USAGE)} className="pill-paper flex-1 !py-1.5 !text-xs">
+                  {uiLanguage === 'zh' ? '用量' : 'Usage'} ↗
+                </button>
+              </div>
+            </div>
+          </section>
+
+          <section className="space-y-2">
+            <h3 className="eyebrow px-2">{t.sections.language}</h3>
+            <div className="card space-y-4 p-4">
+              <Row
+                label={t.dictation.label}
+                hint={(settings.dictationLanguage ?? AUTO_LANGUAGE) === AUTO_LANGUAGE ? t.dictation.autoHint : t.dictation.pinnedHint}
+              >
+                <div className="relative">
+                  <select
+                    value={settings.dictationLanguage ?? AUTO_LANGUAGE}
+                    onChange={e => update('dictationLanguage', e.target.value)}
+                    className="field cursor-pointer appearance-none pr-10"
+                  >
+                    <option value={AUTO_LANGUAGE}>{t.dictation.auto}</option>
+                    <optgroup label="—">
+                      {DICTATION_LANGUAGES.map(l => (
+                        <option key={l.code} value={l.code}>
+                          {l.native === l.name ? l.name : `${l.native} — ${l.name}`}
+                        </option>
+                      ))}
+                    </optgroup>
+                  </select>
+                  <svg className="pointer-events-none absolute right-3.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink/45" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M3 4.5l3 3 3-3" />
+                  </svg>
+                </div>
+              </Row>
+            </div>
+          </section>
+
+          <section className="space-y-2">
+            <h3 className="eyebrow px-2">{t.sections.window}</h3>
+            <div className="card space-y-4 p-4">
+              <Row label={t.windowOpacity}>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="range" min={50} max={100} step={5}
+                    value={Math.round(settings.windowOpacity * 100)}
+                    onChange={e => {
+                      const opacity = Number(e.target.value) / 100;
+                      update('windowOpacity', opacity);
+                      window.electronAPI.setWindowOpacity?.(opacity);
+                    }}
+                    className="h-1 flex-1 cursor-pointer accent-[rgb(24,28,36)]"
+                  />
+                  <span className="w-10 text-right font-mono text-xs tabular-nums text-ink/60">{Math.round(settings.windowOpacity * 100)}%</span>
+                </div>
+              </Row>
+              <Row label={t.historyLimit} error={errors.historyLimit}>
+                <input
+                  type="number" min={1} max={100}
+                  value={settings.historyLimit}
+                  onChange={e => update('historyLimit', parseInt(e.target.value, 10) || 0)}
+                  className="field w-28 font-mono tabular-nums"
+                />
+              </Row>
+            </div>
+          </section>
+
+
         </div>
 
-        {/* Action Buttons */}
-        <div className="flex gap-3 p-6 pt-4 border-t border-gray-700 flex-shrink-0">
-          <button
-            onClick={handleCancel}
-            className="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors"
-            disabled={isSaving}
-          >
-            {t.cancel}
-          </button>
-          <button
-            onClick={handleSave}
-            className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            disabled={isSaving}
-          >
-            {isSaving ? t.saving : t.save}
-          </button>
-        </div>
+        <footer className="flex shrink-0 gap-2 border-t border-ink/[0.06] bg-grout/80 p-3 backdrop-blur-xl">
+          <button onClick={handleCancel} disabled={isSaving} className="pill-paper flex-1">{t.cancel}</button>
+          <button onClick={handleSave} disabled={isSaving} className="pill-solid flex-1">{isSaving ? t.saving : t.save}</button>
+        </footer>
       </div>
     </div>
   );

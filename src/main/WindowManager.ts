@@ -49,6 +49,8 @@ export class WindowManager {
         nodeIntegration: false,
         contextIsolation: true,
         preload: path.join(__dirname, 'preload.cjs'),
+        // it records and transcribes while another app is in front
+        backgroundThrottling: false,
       },
     });
 
@@ -102,9 +104,16 @@ export class WindowManager {
     }
   }
 
+  // the close button only hides the window: dictation from other apps keeps working (⌘Q quits)
   close(): void {
     if (this.window) {
-      this.window.close();
+      this.window.hide();
+    }
+  }
+
+  show(): void {
+    if (this.window) {
+      this.window.show();
     }
   }
 

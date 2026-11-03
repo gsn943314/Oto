@@ -126,6 +126,11 @@ export class AudioRecorder {
     });
   }
 
+  /** The live microphone stream while recording (the record button reads its level) */
+  getStream(): MediaStream | null {
+    return this.stream;
+  }
+
   /**
    * Check if currently recording
    */

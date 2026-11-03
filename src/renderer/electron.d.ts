@@ -1,4 +1,4 @@
-import type { TranscriptionRequest, TranscriptionResponse, AppSettings, TranscriptionHistory } from '../shared/types';
+import type { TranscriptionRequest, TranscriptionResponse, AppSettings, TranscriptionHistory, OverlayState, PasteResult } from '../shared/types';
 
 export interface ElectronAPI {
   transcribeAudio: (request: TranscriptionRequest) => Promise<TranscriptionResponse>;
@@ -11,6 +11,16 @@ export interface ElectronAPI {
   openSystemPreferences: () => Promise<void>;
   minimizeWindow: () => void;
   closeWindow: () => void;
+  setWindowOpacity: (opacity: number) => Promise<void>;
+  openExternal: (url: string) => Promise<void>;
+  onHotkeyToggle: (callback: () => void) => () => void;
+  setOverlayState: (state: OverlayState) => void;
+  showWindow: () => void;
+  onOverlayState: (callback: (state: OverlayState) => void) => () => void;
+  deliverText: (text: string) => Promise<{ result: PasteResult; app?: string }>;
+  getAccessibilityStatus: () => Promise<boolean>;
+  requestAccessibility: () => Promise<void>;
+  onAccessibilityChange: (callback: (trusted: boolean) => void) => () => void;
 }
 
 declare global {

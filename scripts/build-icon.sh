@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Script to generate macOS icon from SVG
-# This script requires ImageMagick or similar tool to convert SVG to PNG
+# Uses Electron/Chromium, sips, and iconutil
 
 set -e
 
@@ -21,19 +21,8 @@ if [ ! -f "$ICON_SVG" ]; then
     exit 1
 fi
 
-# Check if ImageMagick is installed
-if ! command -v convert &> /dev/null; then
-    echo "⚠️  ImageMagick not found. Please install it:"
-    echo "   brew install imagemagick"
-    echo ""
-    echo "Or use an online converter to create icon.png (1024x1024) from icon.svg"
-    echo "Then run this script again."
-    exit 1
-fi
-
-# Convert SVG to PNG
-echo "📐 Converting SVG to PNG (1024x1024)..."
-convert -background none -resize 1024x1024 "$ICON_SVG" "$ICON_PNG"
+# Electron renders the editable SVG; only built-in macOS tools are needed after this.
+env -u ELECTRON_RUN_AS_NODE ./node_modules/.bin/electron scripts/render-icon.cjs "$ICON_SVG" "$ICON_PNG"
 
 # Create iconset directory
 echo "📦 Creating iconset..."

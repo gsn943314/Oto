@@ -1,252 +1,170 @@
+@import '@fontsource-variable/inter';
+@import '@fontsource/ubuntu/400.css';
+@import '@fontsource/ubuntu/500.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-body {
-  margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  overflow: hidden;
-  background-color: #111827; /* 深灰色背景 */
+/* davidkuo.tech's light palette: ink on paper over the pale grout of the tiled wall */
+:root {
+  --ink: 24 28 36;
+  --paper: 255 255 255;
+  --grout: 232 234 238;
+  --alert: 196 52 44;
+  color-scheme: light;
 }
 
+html,
+body,
 #root {
-  width: 100%;
-  height: 100vh;
+  height: 100%;
+  margin: 0;
   overflow: hidden;
-  background-color: #111827; /* 深灰色背景 */
 }
 
-/* Custom scrollbar styles */
-.scrollbar-thin::-webkit-scrollbar {
-  width: 8px;
+body {
+  @apply bg-grout font-sans text-ink antialiased;
+  font-feature-settings: 'cv11', 'ss01';
+  /* the hero's soft clay: two big blurred shapes resting behind everything */
+  background-image:
+    radial-gradient(60% 45% at 8% 0%, rgba(255, 255, 255, 0.95), transparent 70%),
+    radial-gradient(55% 40% at 100% 100%, rgba(255, 255, 255, 0.8), transparent 70%);
+  user-select: none;
 }
 
-.scrollbar-thin::-webkit-scrollbar-track {
-  background: #1f2937;
-  border-radius: 4px;
+/* the floating pill's window is see-through around the pill */
+html.overlay,
+html.overlay body {
+  background: transparent !important;
+  background-image: none !important;
 }
 
-.scrollbar-thin::-webkit-scrollbar-thumb {
-  background: #4b5563;
-  border-radius: 4px;
+.overlay-kbd {
+  @apply inline-flex h-5 min-w-[20px] items-center justify-center rounded-md bg-white/15 px-1 font-mono text-[10px] text-white/80;
 }
 
-.scrollbar-thin::-webkit-scrollbar-thumb:hover {
-  background: #6b7280;
+@keyframes pop {
+  from { opacity: 0; transform: translateY(10px) scale(0.92); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.animate-pop {
+  animation: pop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) both;
 }
 
-.custom-scrollbar::-webkit-scrollbar {
+/* Chinese labels don't need the wide tracking Latin capitals do */
+:lang(zh) .eyebrow {
+  letter-spacing: 0.08em;
+}
+
+::selection {
+  background: rgb(var(--ink) / 0.14);
+}
+
+@layer components {
+  /* small uppercase label over each section */
+  .eyebrow {
+    @apply text-[11px] font-medium uppercase tracking-eyebrow text-ink/45;
+  }
+
+  /* the main action: filled in the text colour */
+  .pill-solid {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-full bg-ink px-4 py-2 text-[13px] font-medium text-paper shadow-lift
+      transition-[transform,opacity] duration-300 ease-spring hover:-translate-y-0.5 active:scale-[0.97]
+      disabled:pointer-events-none disabled:opacity-40;
+  }
+
+  /* the quieter one beside it */
+  .pill-paper {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-full bg-paper px-4 py-2 text-[13px] font-medium text-ink ring-1 ring-ink/15 shadow-soft
+      transition-[transform,opacity] duration-300 ease-spring hover:-translate-y-0.5 active:scale-[0.97]
+      disabled:pointer-events-none disabled:opacity-40;
+  }
+
+  /* a round icon-only button */
+  .icon-btn {
+    @apply grid h-8 w-8 place-items-center rounded-full text-ink/55 transition-[background-color,color,transform] duration-200
+      hover:bg-ink/[0.06] hover:text-ink active:scale-95 disabled:pointer-events-none disabled:opacity-30;
+  }
+
+  .card {
+    @apply rounded-[24px] bg-paper ring-1 ring-ink/[0.07] shadow-card;
+  }
+
+  .field {
+    @apply w-full rounded-2xl bg-ink/[0.04] px-4 py-2.5 text-sm text-ink ring-1 ring-inset ring-ink/10 placeholder:text-ink/35
+      transition-shadow duration-200 focus:outline-none focus:ring-2 focus:ring-ink/60;
+  }
+
+  .kbd {
+    @apply inline-flex h-5 min-w-[20px] items-center justify-center rounded-md bg-paper px-1 font-mono text-[10px] text-ink/60 ring-1 ring-ink/10 shadow-[0_1px_0_rgba(0,0,0,0.06)];
+  }
+}
+
+.drag {
+  -webkit-app-region: drag;
+}
+.no-drag {
+  -webkit-app-region: no-drag;
+}
+
+.thin-scroll::-webkit-scrollbar {
   width: 6px;
 }
-
-.custom-scrollbar::-webkit-scrollbar-track {
-  background: rgba(31, 41, 55, 0.3);
+.thin-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.thin-scroll::-webkit-scrollbar-thumb {
+  background: rgb(var(--ink) / 0.14);
   border-radius: 3px;
 }
-
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(75, 85, 99, 0.5);
-  border-radius: 3px;
+.thin-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgb(var(--ink) / 0.28);
 }
 
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgba(107, 114, 128, 0.7);
+@keyframes rise {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-rise {
+  animation: rise 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
-/* Backdrop blur support */
-.backdrop-blur-sm {
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
+@keyframes sheet-in {
+  from { opacity: 0; transform: translateY(24px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.animate-sheet {
+  animation: sheet-in 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
 }
 
-.backdrop-blur-md {
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+@keyframes fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.animate-fade {
+  animation: fade 0.25s ease-out both;
 }
 
-.backdrop-blur-lg {
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+@keyframes breathe {
+  0%, 100% { transform: scale(1); opacity: 0.5; }
+  50% { transform: scale(1.18); opacity: 0; }
+}
+.animate-breathe {
+  animation: breathe 1.8s ease-in-out infinite;
 }
 
-/* Custom animations */
-@keyframes fade-in {
-  from {
-    opacity: 0;
-    transform: translateY(-10px);
+@keyframes orbit {
+  to { transform: rotate(360deg); }
+}
+.animate-orbit {
+  animation: orbit 1.1s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.animate-fade-in {
-  animation: fade-in 0.3s ease-out;
-}
-
-@keyframes slide-down {
-  from {
-    opacity: 0;
-    transform: translate(-50%, -20px);
-  }
-  to {
-    opacity: 1;
-    transform: translate(-50%, 0);
-  }
-}
-
-.animate-slide-down {
-  animation: slide-down 0.3s ease-out;
-}
-
-/* Pulse animation for recording indicator */
-@keyframes pulse {
-  0%, 100% {
-    opacity: 1;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 0.7;
-    transform: scale(1.05);
-  }
-}
-
-.animate-pulse {
-  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-}
-
-/* Spin animation for loading */
-@keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.animate-spin {
-  animation: spin 1s linear infinite;
-}
-
-/* Fade in/out animation for copy success */
-@keyframes fade-in-out {
-  0% {
-    opacity: 0;
-    transform: translateY(-10px);
-  }
-  20%, 80% {
-    opacity: 1;
-    transform: translateY(0);
-  }
-  100% {
-    opacity: 0;
-    transform: translateY(-10px);
-  }
-}
-
-.animate-fade-in-out {
-  animation: fade-in-out 2s ease-in-out;
-}
-
-/* Smooth transitions for state changes */
-.transition-all-smooth {
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-/* Recording button pulse animation */
-@keyframes recording-pulse {
-  0%, 100% {
-    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
-  }
-  50% {
-    box-shadow: 0 0 0 10px rgba(239, 68, 68, 0);
-  }
-}
-
-.animate-recording-pulse {
-  animation: recording-pulse 1.5s ease-in-out infinite;
-}
-
-/* Custom range slider styles - Enhanced visibility */
-input[type="range"].slider {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 100%;
-  height: 8px;
-  background: #374151;
-  border-radius: 4px;
-  outline: none;
-  cursor: pointer;
-  position: relative;
-}
-
-input[type="range"].slider::-webkit-slider-track {
-  -webkit-appearance: none;
-  appearance: none;
-  background: #374151;
-  height: 8px;
-  border-radius: 4px;
-}
-
-input[type="range"].slider::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  background: #3b82f6;
-  cursor: pointer;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
-  transition: all 0.2s ease;
-  position: relative;
-  z-index: 2;
-}
-
-input[type="range"].slider::-webkit-slider-thumb:hover {
-  background: #2563eb;
-  transform: scale(1.1);
-  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.4);
-}
-
-input[type="range"].slider::-webkit-slider-thumb:active {
-  transform: scale(0.95);
-}
-
-input[type="range"].slider::-moz-range-track {
-  background: #374151;
-  border-radius: 4px;
-  height: 8px;
-}
-
-input[type="range"].slider::-moz-range-progress {
-  background: #3b82f6;
-  border-radius: 4px;
-  height: 8px;
-}
-
-input[type="range"].slider::-moz-range-thumb {
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  background: #3b82f6;
-  cursor: pointer;
-  border: none;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
-  transition: all 0.2s ease;
-}
-
-input[type="range"].slider::-moz-range-thumb:hover {
-  background: #2563eb;
-  transform: scale(1.1);
-  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.4);
-}
-
-input[type="range"].slider::-moz-range-thumb:active {
-  transform: scale(0.95);
 }

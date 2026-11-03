@@ -1,182 +1,78 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useAppContext } from '../App';
 
 interface TextDisplayProps {
   onCopy: (text: string) => void;
-  onClear?: () => void;
 }
 
-export const TextDisplay: React.FC<TextDisplayProps> = ({ onCopy, onClear }) => {
-  const { transcribedText, setTranscribedText, t } = useAppContext();
-  const [showCopied, setShowCopied] = useState(false);
-  const textAreaRef = useRef<HTMLDivElement>(null);
+// The transcript: a white sheet that fills the space between the status line and the record button, with
+// its length and the two things you do with it (clear, copy) along the bottom edge.
+export const TextDisplay: React.FC<TextDisplayProps> = ({ onCopy }) => {
+  const { transcribedText, setTranscribedText, isProcessing, error, t } = useAppContext();
+  const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll to bottom when text changes
   useEffect(() => {
-    if (textAreaRef.current) {
-      textAreaRef.current.scrollTop = textAreaRef.current.scrollHeight;
-    }
-  }, [transcribedText]);
+    const el = scrollRef.current;
+    if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+  }, [transcribedText, isProcessing]);
 
-  const handleCopy = async () => {
-    if (!transcribedText) return;
-
-    try {
-      // Use Electron API if available, otherwise fallback to clipboard API
-      if (window.electronAPI?.copyToClipboard) {
-        await window.electronAPI.copyToClipboard(transcribedText);
-      } else {
-        await navigator.clipboard.writeText(transcribedText);
-      }
-      
-      onCopy(transcribedText);
-      
-      // Show copied feedback
-      setShowCopied(true);
-      setTimeout(() => {
-        setShowCopied(false);
-      }, 2000);
-    } catch (error) {
-      console.error('Failed to copy text:', error);
-    }
-  };
-
-  const handleClear = () => {
-    setTranscribedText('');
-    if (onClear) {
-      onClear();
-    }
-  };
+  const count = [...transcribedText.replace(/\s/g, '')].length;
 
   return (
-    <div className="w-full space-y-3">
-      {/* Text display area */}
-      <div className="relative">
-        <div
-          ref={textAreaRef}
-          className="
-            w-full min-h-[200px] max-h-[300px] overflow-y-auto
-            bg-gray-800 rounded-lg p-4
-            text-gray-100 text-base leading-relaxed
-            border border-gray-700
-            scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800
-          "
-        >
-          {transcribedText ? (
-            <p className="whitespace-pre-wrap break-words">{transcribedText}</p>
-          ) : (
-            <p className="text-gray-500 italic">{t.noTextYet}</p>
-          )}
-        </div>
+    <section className="card flex min-h-0 flex-1 flex-col overflow-hidden">
+      <div ref={scrollRef} className="thin-scroll min-h-0 flex-1 overflow-y-auto px-5 pb-3 pt-5">
+        {transcribedText ? (
+          <p className="select-text whitespace-pre-wrap break-words text-[15px] leading-[1.75] text-ink">{transcribedText}</p>
+        ) : !isProcessing && !error ? (
+          <div className="flex h-full flex-col justify-end pb-2">
+            <p className="text-[22px] font-semibold leading-tight tracking-[-0.02em] text-ink/80">{t.emptyTitle}</p>
+            <p className="mt-2 text-[13px] leading-relaxed text-ink/45">{t.emptyHint}</p>
+          </div>
+        ) : null}
 
-        {/* Copy button overlay */}
-        {transcribedText && (
-          <div className="absolute top-2 right-2 flex gap-2">
-            {/* Clear button */}
-            <button
-              onClick={handleClear}
-              className="
-                px-3 py-1.5 rounded-md
-                bg-red-700 hover:bg-red-600
-                text-white text-sm
-                transition-all duration-200
-                flex items-center space-x-1
-                opacity-90 hover:opacity-100
-              "
-              aria-label="Clear text"
-              title={t.uiLanguage === 'zh' ? '清除文字' : 'Clear text'}
-            >
-              <svg
-                className="w-4 h-4"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                />
-              </svg>
-              <span>{t.uiLanguage === 'zh' ? '清除' : 'Clear'}</span>
-            </button>
-
-            {/* Copy button */}
-            <button
-              onClick={handleCopy}
-              className="
-                px-3 py-1.5 rounded-md
-                bg-gray-700 hover:bg-gray-600
-                text-white text-sm
-                transition-all duration-200
-                flex items-center space-x-1
-                opacity-90 hover:opacity-100
-              "
-              aria-label="Copy text"
-            >
-              {showCopied ? (
-                <>
-                  <svg
-                    className="w-4 h-4 text-green-400"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                    xmlns="http://www.w3.org/2000/svg"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M5 13l4 4L19 7"
-                    />
-                  </svg>
-                  <span className="text-green-400">{t.copied}</span>
-                </>
-              ) : (
-                <>
-                  <svg
-                    className="w-4 h-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                    xmlns="http://www.w3.org/2000/svg"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
-                    />
-                  </svg>
-                  <span>{t.copyToClipboard}</span>
-                </>
-              )}
-            </button>
+        {/* while the words are on their way: three dots where they will appear */}
+        {isProcessing && (
+          <div className={`flex items-center gap-2 text-[13px] text-ink/45 ${transcribedText ? 'mt-3' : 'h-full items-end pb-2'}`}>
+            <span className="flex gap-1">
+              {[0, 160, 320].map(delay => (
+                <span key={delay} className="h-1.5 w-1.5 animate-bounce rounded-full bg-ink/40" style={{ animationDelay: `${delay}ms` }} />
+              ))}
+            </span>
+            {t.holdOn}
           </div>
         )}
       </div>
 
-      {/* Copy success animation */}
-      {showCopied && (
-        <div className="flex items-center justify-center space-x-2 text-green-400 animate-fade-in-out">
-          <svg
-            className="w-5 h-5"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-            xmlns="http://www.w3.org/2000/svg"
+      <footer className="flex h-12 shrink-0 items-center justify-between border-t border-ink/[0.06] pl-5 pr-2">
+        <span className="font-mono text-[11px] tabular-nums text-ink/40">
+          {count} {t.characters}
+        </span>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => setTranscribedText('')}
+            disabled={!transcribedText}
+            className="icon-btn"
+            aria-label={t.clear}
+            title={t.clear}
           >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-            />
-          </svg>
-          <span className="text-sm font-medium">{t.uiLanguage === 'zh' ? '文字已複製到剪貼簿' : 'Text copied to clipboard'}</span>
+            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round">
+              <path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12" />
+            </svg>
+          </button>
+          <button
+            onClick={() => onCopy(transcribedText)}
+            disabled={!transcribedText}
+            className="pill-solid !py-1.5 !pl-3 !pr-3.5 !text-xs"
+            title={t.copy}
+          >
+            <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+              <rect x="8" y="8" width="12" height="12" rx="3" />
+              <path d="M16 8V6a2 2 0 00-2-2H6a2 2 0 00-2 2v8a2 2 0 002 2h2" />
+            </svg>
+            {t.copy}
+          </button>
         </div>
-      )}
-    </div>
+      </footer>
+    </section>
   );
 };

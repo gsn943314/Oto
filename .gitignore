@@ -39,3 +39,29 @@ out/
 debug-*.html
 test-*.html
 check-*.sh
+_backup-app/
+build/native/
+
+# Local credentials, recordings, and transcript data
+.env.*
+!.env.example
+app-settings.json
+app-history.json
+window-state.json
+userData/
+user-data/
+recordings/
+transcripts/
+*.webm
+*.wav
+*.m4a
+*.mp3
+*.pem
+*.key
+*.p12
+*.pfx
+*.mobileprovision
+*.tsbuildinfo
+
+# Local branding explorations
+build/brand/
