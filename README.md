@@ -1,6 +1,6 @@
-# OTO
+# Oto
 
-<img src="build/icon.svg" alt="OTO app icon" width="128" />
+<img src="build/icon.svg" alt="Oto app icon" width="128" />
 
 A small macOS voice input app built on the **OpenAI GPT Transcribe API**. Tap a trigger key, speak, and put the transcript into the app you're working in.
 
@@ -8,7 +8,7 @@ This project began with OpenAI Whisper and has since migrated to GPT Transcribe.
 
 I use voice input a lot while developing. I really enjoy Typeless, and wanted to try building a small version of my own: a simple tool that stays out of the way and lets me bring my own API key. This is an independent personal project, with no affiliation with Typeless or OpenAI.
 
-[Download for macOS](https://github.com/gsn943314/voice-input-assistant/releases/latest) · [繁體中文介紹](docs/README.zh-TW.md) · [MIT License](LICENSE)
+[Download for macOS](https://github.com/gsn943314/Oto/releases/latest) · [繁體中文介紹](docs/README.zh-TW.md) · [MIT License](LICENSE)
 
 ## What it does
 
@@ -23,15 +23,15 @@ Transcription happens **after** recording stops. The app uses the hosted `gpt-tr
 
 ## Download options
 
-Each [Release](https://github.com/gsn943314/voice-input-assistant/releases/latest) includes:
+Each [Release](https://github.com/gsn943314/Oto/releases/latest) includes:
 
-- **Ready-to-use app:** download `OTO-<version>-arm64.dmg` / `.zip` for Apple Silicon, or `OTO-<version>-x64.dmg` / `.zip` for Intel. No Node.js, Xcode, or build step is needed.
-- **Source code:** download `OTO-<version>-source.zip`, use GitHub's Source code archives, or clone the repository. Follow [Build from source](#build-from-source) to make your own app.
+- **Ready-to-use app:** download `Oto-<version>-arm64.dmg` / `.zip` for Apple Silicon, or `Oto-<version>-x64.dmg` / `.zip` for Intel. No Node.js, Xcode, or build step is needed.
+- **Source code:** download `Oto-<version>-source.zip`, use GitHub's Source code archives, or clone the repository. Follow [Build from source](#build-from-source) to make your own app.
 - **Checksums:** `SHA256SUMS.txt` lists the release artifacts' SHA-256 digests.
 
 ## Install and use
 
-1. Download the ZIP or DMG matching your Mac from [Releases](https://github.com/gsn943314/voice-input-assistant/releases/latest): **arm64** for Apple Silicon, **x64** for Intel.
+1. Download the ZIP or DMG matching your Mac from [Releases](https://github.com/gsn943314/Oto/releases/latest): **arm64** for Apple Silicon, **x64** for Intel.
 2. Move the app to **Applications** and open it. These builds are not Apple-notarized. If blocked, try opening once, then go to **System Settings → Privacy & Security → Open Anyway**, authenticate, and confirm **Open**. See the [full opening guide](SECURITY_WARNING_SOLUTION.md).
 3. Open Settings, paste **your own [OpenAI API key](https://platform.openai.com/api-keys)**, and save. You need API access to `gpt-transcribe` and sufficient API balance or quota; OpenAI charges API usage to your account. Check your [billing](https://platform.openai.com/settings/organization/billing/overview) and [usage](https://platform.openai.com/usage).
 4. Allow **Microphone** access. Enable the app in **System Settings → Privacy & Security → Accessibility** for the global trigger and automatic paste.
@@ -56,8 +56,8 @@ Tap the trigger by itself. Key combinations such as Control+C should continue wo
 Requires **macOS 11 or later**, **Node.js 20+**, npm, and **Xcode Command Line Tools** (Swift compiler, `lipo`, and `codesign`). Install the tools with `xcode-select --install` if needed.
 
 ```sh
-git clone https://github.com/gsn943314/voice-input-assistant.git
-cd voice-input-assistant
+git clone https://github.com/gsn943314/Oto.git
+cd Oto
 npm ci
 npm run check
 npm run dev
@@ -75,7 +75,7 @@ npm run package:mac -- --arm64
 # npm run package:mac -- --x64
 ```
 
-Output goes into `release/`. To build just an unpacked `.app`, use `npm run package:mac:dir -- --arm64`. Packaging builds the icon and native helper from source and applies an ad-hoc signature. It does not require an Apple Developer account. A rebuild can require granting macOS permissions again. See [PACKAGING.md](PACKAGING.md).
+Output goes into `release/`. To build just an unpacked `.app`, use `npm run package:mac:dir -- --arm64`. Packaging builds the icon and native helper from source and signs the app. It reuses a local `Oto Local Development` certificate when available, otherwise uses an ad-hoc signature. It does not require an Apple Developer account. Ad-hoc rebuilds can require granting macOS permissions again. See [PACKAGING.md](PACKAGING.md).
 
 ## Architecture
 
@@ -94,7 +94,7 @@ There is no project-hosted server, cloud history sync, or bundled speech model.
 
 ## Transcription model
 
-OTO started as a Whisper-based app and now uses **`gpt-transcribe`**. It sends JSON-format transcription requests with optional `languages` hints and reads the model's detected-language array. An empty array is valid; it does not mean transcription failed. Chinese predictions, including mixed-language results, are converted to Traditional Chinese locally.
+Oto started as a Whisper-based app and now uses **`gpt-transcribe`**. It sends JSON-format transcription requests with optional `languages` hints and reads the model's detected-language array. An empty array is valid; it does not mean transcription failed. Chinese predictions, including mixed-language results, are converted to Traditional Chinese locally.
 
 Your existing OpenAI API key can be reused if its project and permissions allow the model and the account has available quota. Each user supplies their own key. See [OpenAI's model documentation](https://developers.openai.com/api/docs/models/gpt-transcribe) for current availability and pricing. There is no automatic fallback to Whisper.
 

@@ -1,4 +1,4 @@
-import { app } from 'electron';
+import { app, systemPreferences } from 'electron';
 import fs from 'fs';
 import { format } from 'util';
 import path from 'path';
@@ -14,7 +14,7 @@ import { IPC_CHANNELS } from '../shared/constants.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Keep existing local settings and history across the OTO rename.
+// Keep existing local settings and history across the Oto rename.
 if (!app.commandLine.hasSwitch('user-data-dir')) {
   app.setPath('userData', path.join(app.getPath('appData'), 'voice-input-app'));
 }
@@ -43,6 +43,7 @@ let settingsManager: SettingsManager;
 let historyManager: HistoryManager;
 const hotkey = new HotkeyHelper();
 const overlay = new OverlayWindow();
+let permissionTimer: NodeJS.Timeout | undefined;
 
 function createWindow() {
   const window = windowManager.createMainWindow({
@@ -112,6 +113,18 @@ app.whenReady().then(() => {
     windowManager.getWindow()?.webContents.send(IPC_CHANNELS.ACCESSIBILITY_CHANGED, trusted);
   });
   hotkey.start();
+  // macOS can keep an already-running helper's permission result cached after a grant.
+  // Reconnect it once when the parent is trusted, without repeatedly restarting it.
+  let reconnectedForGrant = false;
+  permissionTimer = setInterval(() => {
+    const parentTrusted = systemPreferences.isTrustedAccessibilityClient(false);
+    if (!parentTrusted) { reconnectedForGrant = false; return; }
+    if (!hotkey.trusted && !reconnectedForGrant) {
+      reconnectedForGrant = true;
+      console.log('[accessibility] refreshing helper after permission grant');
+      hotkey.restart();
+    }
+  }, 2000);
   const startup = settingsManager.load();
   hotkey.setTrigger(startup.triggerKey ?? 'control');
   overlay.showBadge = startup.pointerBadge ?? true;
@@ -126,6 +139,7 @@ app.whenReady().then(() => {
 });
 
 app.on('before-quit', () => {
+  if (permissionTimer) clearInterval(permissionTimer);
   hotkey.stop();
   overlay.destroy();
 });

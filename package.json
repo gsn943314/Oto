@@ -53,7 +53,7 @@
   },
   "build": {
     "appId": "com.voiceinput.app",
-    "productName": "OTO",
+    "productName": "Oto",
     "mac": {
       "category": "public.app-category.productivity",
       "target": [
@@ -76,7 +76,7 @@
       "gatekeeperAssess": false,
       "minimumSystemVersion": "11.0",
       "extendInfo": {
-        "NSMicrophoneUsageDescription": "OTO records your voice to transcribe it using your OpenAI API account."
+        "NSMicrophoneUsageDescription": "Oto records your voice to transcribe it using your OpenAI API account."
       }
     },
     "dmg": {
@@ -121,7 +121,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/gsn943314/voice-input-assistant.git"
+    "url": "https://github.com/gsn943314/Oto.git"
   },
   "engines": {
     "node": ">=20"

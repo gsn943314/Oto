@@ -1,12 +1,20 @@
 #!/bin/bash
-# Signs local builds inside out without a Developer ID. This is not notarization;
-# rebuilding may require granting macOS permissions again.
+# Reuse a local certificate when configured; community CI builds use ad-hoc signing.
 set -euo pipefail
-APP="${1:-release/mac-arm64/OTO.app}"
+APP="${1:-release/mac-arm64/Oto.app}"
+IDENTITY="${OTO_SIGNING_IDENTITY:-}"
+if [[ -z "$IDENTITY" && "${CI:-}" != "true" ]]; then
+  IDENTITY="$(security find-identity -v -p codesigning | awk '/"Oto Local Development"/ { print $2; exit }')"
+fi
+IDENTITY="${IDENTITY:--}"
 for f in "$APP"/Contents/Frameworks/*; do
-  codesign --force --deep --sign - "$f"
+  codesign --force --deep --sign "$IDENTITY" "$f"
 done
-codesign --force --sign - --identifier com.voiceinput.app.helper "$APP/Contents/Resources/native/voiceinput-helper"
-codesign --force --sign - --identifier com.voiceinput.app "$APP"
+codesign --force --sign "$IDENTITY" --identifier com.voiceinput.app.helper "$APP/Contents/Resources/native/voiceinput-helper"
+codesign --force --sign "$IDENTITY" --identifier com.voiceinput.app "$APP"
 codesign --verify --deep --strict "$APP"
-echo "signed $APP"
+if [[ "$IDENTITY" == "-" ]]; then
+  echo "signed $APP (ad-hoc; macOS may request permission after rebuilding)"
+else
+  echo "signed $APP with a consistent certificate identity"
+fi

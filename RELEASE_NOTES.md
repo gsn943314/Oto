@@ -1,6 +1,6 @@
-# OTO 1.1.0
+# Oto 1.1.0
 
-- Renamed the app to OTO with a minimal rippling O icon.
+- Renamed the app to Oto with a minimal rippling O icon.
 - Migrated from Whisper to GPT Transcribe, including plural language hints, JSON responses, and mixed-language detection.
 
 - Dictation from any app using one configurable trigger key: Control, fn, or Right Option.

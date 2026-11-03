@@ -35,6 +35,7 @@ export class HotkeyHelper extends EventEmitter {
     this.child = child;
 
     readline.createInterface({ input: child.stdout! }).on('line', line => {
+      if (this.child !== child) return;
       let msg: any;
       try { msg = JSON.parse(line); } catch { return; }
       switch (msg.event) {
@@ -57,6 +58,8 @@ export class HotkeyHelper extends EventEmitter {
     });
 
     child.on('exit', code => {
+      // A replaced helper may exit after its successor has started.
+      if (this.child !== child) return;
       this.child = null;
       for (const resolve of this.pending.values()) resolve({ result: 'failed' });
       this.pending.clear();
@@ -71,8 +74,17 @@ export class HotkeyHelper extends EventEmitter {
 
   stop(): void {
     this.stopped = true;
-    this.child?.kill();
+    const child = this.child;
     this.child = null;
+    this.trusted = false;
+    child?.kill();
+    for (const resolve of this.pending.values()) resolve({ result: 'failed' });
+    this.pending.clear();
+  }
+
+  restart(): void {
+    this.stop();
+    this.start();
   }
 
   setTrigger(key: TriggerKey): void {

@@ -1,4 +1,4 @@
-# OTO
+# Oto
 
 起初基於 Whisper，現在使用 **OpenAI GPT Transcribe API** 的一個 macOS 語音輸入小 App。按一下觸發鍵開始說話，再按一下，就把文字貼進目前使用的 App。
 
@@ -6,16 +6,16 @@
 
 ## 下載哪個版本？
 
-在 [Release](https://github.com/gsn943314/voice-input-assistant/releases/latest) 可以選：
+在 [Release](https://github.com/gsn943314/Oto/releases/latest) 可以選：
 
 - **直接使用**：Apple Silicon 下載 `arm64.dmg` 或 `arm64.zip`；Intel 下載 `x64.dmg` 或 `x64.zip`，不必安裝開發工具。
-- **自行建置**：下載 `OTO-<版本>-source.zip`、GitHub 的 Source code，或 clone 倉庫，再照 [建置說明](../README.md#build-from-source) 操作。
+- **自行建置**：下載 `Oto-<版本>-source.zip`、GitHub 的 Source code，或 clone 倉庫，再照 [建置說明](../README.md#build-from-source) 操作。
 - **檔案校驗**：`SHA256SUMS.txt` 提供各下載檔的 SHA-256。
 
 ## 使用方式
 
-1. 到 [Releases](https://github.com/gsn943314/voice-input-assistant/releases/latest) 下載符合電腦的版本：Apple Silicon 選 arm64，Intel 選 x64。
-2. 把 **OTO.app** 放進「應用程式」。這是未經 Apple 公證的版本；若被阻擋，先嘗試開啟一次，再到「系統設定 → 隱私權與安全性 → 仍要打開」，依提示認證並確認開啟。完整步驟見 [開啟與權限指南](../SECURITY_WARNING_SOLUTION.md)。開啟後到 Settings 填入**自己的 [OpenAI API Key](https://platform.openai.com/api-keys)** 並儲存。API 費用由 OpenAI 向使用者帳號收取，需有可用額度與模型存取權限。
+1. 到 [Releases](https://github.com/gsn943314/Oto/releases/latest) 下載符合電腦的版本：Apple Silicon 選 arm64，Intel 選 x64。
+2. 把 **Oto.app** 放進「應用程式」。這是未經 Apple 公證的版本；若被阻擋，先嘗試開啟一次，再到「系統設定 → 隱私權與安全性 → 仍要打開」，依提示認證並確認開啟。完整步驟見 [開啟與權限指南](../SECURITY_WARNING_SOLUTION.md)。開啟後到 Settings 填入**自己的 [OpenAI API Key](https://platform.openai.com/api-keys)** 並儲存。API 費用由 OpenAI 向使用者帳號收取，需有可用額度與模型存取權限。
 3. 允許麥克風權限，並到「系統設定 → 隱私權與安全性 → 輔助使用」開啟 App 權限。
 4. 在「Dictate anywhere → Trigger key」選 Control、fn 或右 Option。切到其他 App 的輸入框，單按觸發鍵開始錄音，再按一次停止並轉成文字。
 
@@ -39,6 +39,8 @@ API Key 優先使用 macOS Keychain 支援的 Electron safeStorage 保護；舊�
 沒有額外架設的後端；使用者直接透過自己的 Key 連到 OpenAI。從原始碼安裝與建置步驟見 [README](../README.md#build-from-source)。
 
 這版已從 Whisper 遷移到 `gpt-transcribe`。原有 OpenAI API Key 通常可以沿用，需有模型使用權限與可用額度；其他使用者仍要自行填寫 Key。沒有自動切回 Whisper 的機制。詳見 [官方模型文件](https://developers.openai.com/api/docs/models/gpt-transcribe)。
+
+本機自行重建時，簽章腳本會優先使用鑰匙圈內的 `Oto Local Development` 憑證；沒有憑證時使用 ad-hoc 簽章，不需要付費 Apple 開發者帳號。固定身分可減少重建後重新授權，但切換簽章時仍可能需要最後授權一次。憑證私鑰只留在本機，GitHub Release 使用 ad-hoc 簽章。詳見 [建置與簽章](../PACKAGING.md)。
 
 ## 授權
 
