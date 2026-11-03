@@ -12,9 +12,9 @@
     "build:renderer": "vite build",
     "build:main": "node -e \"require('node:fs').rmSync('dist/main', {recursive:true,force:true})\" && tsc -p tsconfig.main.json && cp src/main/preload.cjs dist/main/main/preload.cjs",
     "build:icon": "bash scripts/build-icon.sh",
-    "package": "npm run build && electron-builder",
-    "package:mac": "npm run build && electron-builder --mac",
-    "package:mac:dir": "npm run build && electron-builder --mac --dir",
+    "package": "npm run build && electron-builder --publish never",
+    "package:mac": "npm run build && electron-builder --mac --publish never",
+    "package:mac:dir": "npm run build && electron-builder --mac --dir --publish never",
     "build:helper": "bash scripts/build-helper.sh",
     "check": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.main.json",
     "test": "npm run build:main && env -u ELECTRON_RUN_AS_NODE electron tests/transcription.cjs"

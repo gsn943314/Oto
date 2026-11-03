@@ -18,3 +18,5 @@ Only compiled app files, package metadata, runtime dependencies, and the native 
 GitHub Actions builds both architectures from the committed source, runs the type checks and mocked API tests, and publishes a source ZIP plus checksums. Run the **Release** workflow manually, or push a main-branch commit whose message contains `[release]`. Its version comes from `package.json`. Bump that version before the next release; the workflow refuses to overwrite a published release. An existing draft is replaced with the current verified artifacts before publication.
 
 The workflow uses GitHub's built-in `GITHUB_TOKEN`; do not add your OpenAI API key or local signing key to the workflow. Community release builds use ad-hoc signatures.
+
+Packaging commands explicitly disable electron-builder auto-publishing. Only the Release workflow's final step uploads artifacts, after the source ZIP and checksums are ready.
