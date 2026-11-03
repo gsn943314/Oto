@@ -125,7 +125,7 @@ export interface Translations {
 
 export const translations: Record<Language, Translations> = {
   zh: {
-    appTitle: 'Oto',
+    appTitle: 'OTO',
     
     startRecording: '開始錄音',
     stopRecording: '停止錄音',
@@ -213,10 +213,10 @@ export const translations: Record<Language, Translations> = {
       pointerBadge: '在滑鼠旁顯示狀態',
       pointerBadgeHint: '錄音和轉換時，滑鼠旁會跟著一個小泡泡。',
       permission: '輔助使用權限',
-      permissionMissing: '尚未授權：要偵測按鍵、自動貼上，需要允許 Oto。',
+      permissionMissing: '尚未授權：要偵測按鍵、自動貼上，需要允許 OTO。',
       permissionGranted: '已授權',
       grant: '前往授權',
-      granting: '已開啟系統設定，打開 Oto 的開關後會自動生效',
+      granting: '已開啟系統設定，打開 OTO 的開關後會自動生效',
       tapToTalk: '在任何 App 按 {key} 說話',
     },
 
@@ -249,7 +249,7 @@ export const translations: Record<Language, Translations> = {
       [ErrorType.MICROPHONE_ACCESS_DENIED]: {
         status: '無法收音',
         title: '沒有麥克風權限',
-        body: '請到「系統設定 › 隱私權與安全性 › 麥克風」允許 Oto。',
+        body: '請到「系統設定 › 隱私權與安全性 › 麥克風」允許 OTO。',
       },
       [ErrorType.AUDIO_RECORDING_FAILED]: {
         status: '錄音失敗',
@@ -365,10 +365,10 @@ export const translations: Record<Language, Translations> = {
       pointerBadge: 'Show status by the pointer',
       pointerBadgeHint: 'A small bubble follows the mouse while recording and transcribing.',
       permission: 'Accessibility permission',
-      permissionMissing: 'Not granted: Oto needs it to notice the key and paste.',
+      permissionMissing: 'Not granted: OTO needs it to notice the key and paste.',
       permissionGranted: 'Granted',
       grant: 'Grant access',
-      granting: 'System Settings is open — switch Oto on and it takes effect by itself',
+      granting: 'System Settings is open — switch OTO on and it takes effect by itself',
       tapToTalk: 'Tap {key} in any app to talk',
     },
 
@@ -401,7 +401,7 @@ export const translations: Record<Language, Translations> = {
       [ErrorType.MICROPHONE_ACCESS_DENIED]: {
         status: 'No microphone',
         title: 'Microphone access is off',
-        body: 'Allow Oto in System Settings › Privacy & Security › Microphone.',
+        body: 'Allow OTO in System Settings › Privacy & Security › Microphone.',
       },
       [ErrorType.AUDIO_RECORDING_FAILED]: {
         status: 'Recording failed',

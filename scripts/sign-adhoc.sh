@@ -2,7 +2,7 @@
 # Signs local builds inside out without a Developer ID. This is not notarization;
 # rebuilding may require granting macOS permissions again.
 set -euo pipefail
-APP="${1:-release/mac-arm64/Oto.app}"
+APP="${1:-release/mac-arm64/OTO.app}"
 for f in "$APP"/Contents/Frameworks/*; do
   codesign --force --deep --sign - "$f"
 done

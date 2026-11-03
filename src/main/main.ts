@@ -14,7 +14,7 @@ import { IPC_CHANNELS } from '../shared/constants.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Keep existing local settings and history across the Oto rename.
+// Keep existing local settings and history across the OTO rename.
 if (!app.commandLine.hasSwitch('user-data-dir')) {
   app.setPath('userData', path.join(app.getPath('appData'), 'voice-input-app'));
 }

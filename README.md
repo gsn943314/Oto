@@ -1,6 +1,6 @@
-# Oto
+# OTO
 
-<img src="build/icon.svg" alt="Oto app icon" width="128" />
+<img src="build/icon.svg" alt="OTO app icon" width="128" />
 
 A small macOS voice input app built on the **OpenAI GPT Transcribe API**. Tap a trigger key, speak, and put the transcript into the app you're working in.
 
@@ -21,10 +21,18 @@ I use voice input a lot while developing. I really enjoy Typeless, and wanted to
 
 Transcription happens **after** recording stops. The app uses the hosted `gpt-transcribe` API, requires an internet connection, and does not run a speech model locally. The interface is currently English. Windows, Linux, and iOS are not supported by this repository.
 
+## Download options
+
+Each [Release](https://github.com/gsn943314/voice-input-assistant/releases/latest) includes:
+
+- **Ready-to-use app:** download `OTO-<version>-arm64.dmg` / `.zip` for Apple Silicon, or `OTO-<version>-x64.dmg` / `.zip` for Intel. No Node.js, Xcode, or build step is needed.
+- **Source code:** download `OTO-<version>-source.zip`, use GitHub's Source code archives, or clone the repository. Follow [Build from source](#build-from-source) to make your own app.
+- **Checksums:** `SHA256SUMS.txt` lists the release artifacts' SHA-256 digests.
+
 ## Install and use
 
 1. Download the ZIP or DMG matching your Mac from [Releases](https://github.com/gsn943314/voice-input-assistant/releases/latest): **arm64** for Apple Silicon, **x64** for Intel.
-2. Move the app to **Applications** and open it. These community builds are ad-hoc signed, not Apple-notarized; see [opening the app](SECURITY_WARNING_SOLUTION.md) if macOS blocks it.
+2. Move the app to **Applications** and open it. These builds are not Apple-notarized. If blocked, try opening once, then go to **System Settings → Privacy & Security → Open Anyway**, authenticate, and confirm **Open**. See the [full opening guide](SECURITY_WARNING_SOLUTION.md).
 3. Open Settings, paste **your own [OpenAI API key](https://platform.openai.com/api-keys)**, and save. You need API access to `gpt-transcribe` and sufficient API balance or quota; OpenAI charges API usage to your account. Check your [billing](https://platform.openai.com/settings/organization/billing/overview) and [usage](https://platform.openai.com/usage).
 4. Allow **Microphone** access. Enable the app in **System Settings → Privacy & Security → Accessibility** for the global trigger and automatic paste.
 5. Choose a trigger key, focus a text field in another app, tap the key, speak, and tap again. Or use the microphone button in the app without a global trigger.
@@ -55,6 +63,8 @@ npm run check
 npm run dev
 ```
 
+If you downloaded the source ZIP, extract it and run the same commands starting at `npm ci` from the extracted directory.
+
 Development starts Vite on port **5173**, compiles the Swift helper and Electron code, and opens the app once Vite is ready. Restart development after changing main-process code. Changes to renderer code reload automatically.
 
 To make a distributable app:
@@ -84,7 +94,7 @@ There is no project-hosted server, cloud history sync, or bundled speech model.
 
 ## Transcription model
 
-Oto started as a Whisper-based app and now uses **`gpt-transcribe`**. It sends JSON-format transcription requests with optional `languages` hints and reads the model's detected-language array. An empty array is valid; it does not mean transcription failed. Chinese predictions, including mixed-language results, are converted to Traditional Chinese locally.
+OTO started as a Whisper-based app and now uses **`gpt-transcribe`**. It sends JSON-format transcription requests with optional `languages` hints and reads the model's detected-language array. An empty array is valid; it does not mean transcription failed. Chinese predictions, including mixed-language results, are converted to Traditional Chinese locally.
 
 Your existing OpenAI API key can be reused if its project and permissions allow the model and the account has available quota. Each user supplies their own key. See [OpenAI's model documentation](https://developers.openai.com/api/docs/models/gpt-transcribe) for current availability and pricing. There is no automatic fallback to Whisper.
 

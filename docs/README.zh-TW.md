@@ -1,13 +1,21 @@
-# Oto
+# OTO
 
 起初基於 Whisper，現在使用 **OpenAI GPT Transcribe API** 的一個 macOS 語音輸入小 App。按一下觸發鍵開始說話，再按一下，就把文字貼進目前使用的 App。
 
 我平常開發時滿常用語音輸入，也很喜歡 Typeless，所以想試著做一個自己的版本：功能簡單、隨時能用，而且可以帶自己的 API Key。這是獨立的個人開源專案，與 Typeless 或 OpenAI 沒有隸屬關係。
 
+## 下載哪個版本？
+
+在 [Release](https://github.com/gsn943314/voice-input-assistant/releases/latest) 可以選：
+
+- **直接使用**：Apple Silicon 下載 `arm64.dmg` 或 `arm64.zip`；Intel 下載 `x64.dmg` 或 `x64.zip`，不必安裝開發工具。
+- **自行建置**：下載 `OTO-<版本>-source.zip`、GitHub 的 Source code，或 clone 倉庫，再照 [建置說明](../README.md#build-from-source) 操作。
+- **檔案校驗**：`SHA256SUMS.txt` 提供各下載檔的 SHA-256。
+
 ## 使用方式
 
 1. 到 [Releases](https://github.com/gsn943314/voice-input-assistant/releases/latest) 下載符合電腦的版本：Apple Silicon 選 arm64，Intel 選 x64。
-2. 把 App 放進「應用程式」，開啟後到 Settings 填入**自己的 [OpenAI API Key](https://platform.openai.com/api-keys)** 並儲存。API 費用由 OpenAI 向使用者帳號收取，需有可用額度與模型存取權限。
+2. 把 **OTO.app** 放進「應用程式」。這是未經 Apple 公證的版本；若被阻擋，先嘗試開啟一次，再到「系統設定 → 隱私權與安全性 → 仍要打開」，依提示認證並確認開啟。完整步驟見 [開啟與權限指南](../SECURITY_WARNING_SOLUTION.md)。開啟後到 Settings 填入**自己的 [OpenAI API Key](https://platform.openai.com/api-keys)** 並儲存。API 費用由 OpenAI 向使用者帳號收取，需有可用額度與模型存取權限。
 3. 允許麥克風權限，並到「系統設定 → 隱私權與安全性 → 輔助使用」開啟 App 權限。
 4. 在「Dictate anywhere → Trigger key」選 Control、fn 或右 Option。切到其他 App 的輸入框，單按觸發鍵開始錄音，再按一次停止並轉成文字。
 

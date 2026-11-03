@@ -1,0 +1,58 @@
+name: Release
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[release]')
+    runs-on: macos-14
+    permissions:
+      contents: write
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      GH_REPO: ${{ github.repository }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+      - run: npm test
+      - run: npm run package:mac
+      - name: Bundle source and checksums
+        shell: bash
+        run: |
+          version=$(node -p "require('./package.json').version")
+          git archive --format=zip --prefix="OTO-$version/" --output="release/OTO-$version-source.zip" HEAD
+          cd release
+          shasum -a 256 OTO-"$version"-*.dmg OTO-"$version"-*.zip > SHA256SUMS.txt
+      - name: Publish verified artifacts
+        shell: bash
+        run: |
+          version=$(node -p "require('./package.json').version")
+          tag="v$version"
+          if gh release view "$tag" --json isDraft > /tmp/oto-release.json 2>/dev/null; then
+            draft=$(node -p "require('/tmp/oto-release.json').isDraft")
+            if [ "$draft" != true ]; then
+              echo "Release $tag is already published. Bump package.json before releasing again."
+              exit 1
+            fi
+            gh release edit "$tag" --target "$GITHUB_SHA" --title "OTO $version" --notes-file GITHUB_RELEASE_DESCRIPTION.md
+            gh release view "$tag" --json assets --jq '.assets[].name' > /tmp/oto-old-assets.txt
+            while IFS= read -r asset; do
+              [ -z "$asset" ] || gh release delete-asset "$tag" "$asset" --yes
+            done < /tmp/oto-old-assets.txt
+          else
+            gh release create "$tag" --draft --target "$GITHUB_SHA" --title "OTO $version" --notes-file GITHUB_RELEASE_DESCRIPTION.md
+          fi
+          gh release upload "$tag" release/OTO-"$version"-*.dmg release/OTO-"$version"-*.zip release/SHA256SUMS.txt
+          gh release edit "$tag" --draft=false --latest
