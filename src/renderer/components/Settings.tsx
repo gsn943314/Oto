@@ -134,68 +134,11 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, onSave }) =
           {errors.general && <p className="rounded-2xl bg-alert/10 px-4 py-2.5 text-sm text-alert">{errors.general}</p>}
 
           <section className="space-y-2">
-            <h3 className="eyebrow px-2">{t.anywhere.section}</h3>
-            <div className="card space-y-4 p-4">
-              <Row label={t.anywhere.trigger} hint={settings.triggerKey === 'fn' ? t.anywhere.fnHint : t.anywhere.triggerHint}>
-                <Segmented<TriggerKey>
-                  value={settings.triggerKey ?? 'control'}
-                  options={[
-                    { value: 'control', label: '⌃ Control' },
-                    { value: 'fn', label: 'fn' },
-                    { value: 'rightOption', label: t.anywhere.rightOption },
-                    { value: 'off', label: t.anywhere.off },
-                  ]}
-                  onChange={v => update('triggerKey', v)}
-                />
-              </Row>
-              <label className="flex cursor-pointer items-start justify-between gap-4">
-                <span>
-                  <span className="block text-[13px] font-medium text-ink/80">{t.anywhere.autoPaste}</span>
-                  <span className="mt-1 block text-xs leading-relaxed text-ink/45">{t.anywhere.autoPasteHint}</span>
-                </span>
-                <input type="checkbox" className="peer sr-only" checked={settings.autoPaste ?? true} onChange={e => update('autoPaste', e.target.checked)} />
-                <span aria-hidden="true" className="relative mt-0.5 h-6 w-10 shrink-0 rounded-full bg-ink/15 transition-colors duration-300 peer-checked:bg-ink
-                  after:absolute after:left-0.5 after:top-0.5 after:h-5 after:w-5 after:rounded-full after:bg-paper after:shadow-knob after:transition-transform after:duration-500 after:ease-spring peer-checked:after:translate-x-4" />
-              </label>
-              <label className="flex cursor-pointer items-start justify-between gap-4">
-                <span>
-                  <span className="block text-[13px] font-medium text-ink/80">{t.anywhere.pointerBadge}</span>
-                  <span className="mt-1 block text-xs leading-relaxed text-ink/45">{t.anywhere.pointerBadgeHint}</span>
-                </span>
-                <input type="checkbox" className="peer sr-only" checked={settings.pointerBadge ?? true} onChange={e => update('pointerBadge', e.target.checked)} />
-                <span aria-hidden="true" className="relative mt-0.5 h-6 w-10 shrink-0 rounded-full bg-ink/15 transition-colors duration-300 peer-checked:bg-ink
-                  after:absolute after:left-0.5 after:top-0.5 after:h-5 after:w-5 after:rounded-full after:bg-paper after:shadow-knob after:transition-transform after:duration-500 after:ease-spring peer-checked:after:translate-x-4" />
-              </label>
-              <div className={`flex items-center justify-between gap-3 rounded-2xl px-3.5 py-3 ${trusted === false ? 'bg-alert/[0.07]' : 'bg-ink/[0.04]'}`}>
-                <span className="min-w-0">
-                  <span className="flex items-center gap-2 text-[13px] font-medium text-ink/80">
-                    <span className={`h-1.5 w-1.5 rounded-full ${trusted ? 'bg-ink' : trusted === false ? 'bg-alert' : 'bg-ink/25'}`} />
-                    {t.anywhere.permission}
-                  </span>
-                  <span className="mt-0.5 block text-xs leading-relaxed text-ink/50">
-                    {trusted ? t.anywhere.permissionGranted : granting ? t.anywhere.granting : t.anywhere.permissionMissing}
-                  </span>
-                </span>
-                {trusted === false && !granting && (
-                  <button type="button" onClick={() => { setGranting(true); window.electronAPI.requestAccessibility(); }} className="pill-solid shrink-0 !px-3 !py-1.5 !text-xs">
-                    {t.anywhere.grant}
-                  </button>
-                )}
-              </div>
-            </div>
-          </section>
-
-          <section className="space-y-2">
             <h3 className="eyebrow px-2">{t.sections.account}</h3>
             <div className="card space-y-4 p-4">
               <Row
                 label={t.openAIApiKey}
                 error={errors.apiKey}
-                hint={
-                  <button type="button" onClick={() => window.electronAPI.openExternal(EXTERNAL_LINKS.OPENAI_API_KEYS)} className="underline decoration-ink/20 underline-offset-2 hover:text-ink">
-                    {t.getApiKey} ↗
-                  </button>
-                }
               >
                 <div className="relative">
                   <input
@@ -203,6 +146,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, onSave }) =
                     value={settings.apiKey}
                     onChange={e => update('apiKey', e.target.value.trim())}
                     placeholder={t.apiKeyPlaceholder}
+                    aria-label={t.openAIApiKey}
                     spellCheck={false}
                     className="field pr-11 font-mono text-[13px]"
                   />
@@ -215,13 +159,62 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, onSave }) =
                   </button>
                 </div>
               </Row>
-              <div className="flex gap-2">
-                <button type="button" onClick={() => window.electronAPI.openExternal(EXTERNAL_LINKS.OPENAI_BILLING)} className="pill-paper flex-1 !py-1.5 !text-xs">
-                  {uiLanguage === 'zh' ? '餘額與儲值' : 'Balance'} ↗
+              <button type="button" onClick={() => window.electronAPI.openExternal(EXTERNAL_LINKS.OPENAI_API_KEYS)} className="pill-solid min-h-11 w-full !py-3">
+                {t.getApiKey} ↗
+              </button>
+              <details className="group border-t border-ink/[0.06] pt-3">
+                <summary className="flex cursor-pointer list-none items-center justify-between py-1 text-xs font-medium text-ink/55 hover:text-ink [&::-webkit-details-marker]:hidden">
+                  {uiLanguage === 'zh' ? '更多帳戶選項' : 'Additional account options'}
+                  <svg aria-hidden="true" className="h-3.5 w-3.5 transition-transform group-open:rotate-180" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M3 4.5l3 3 3-3" />
+                  </svg>
+                </summary>
+                <div className="mt-3 flex gap-2">
+                  <button type="button" onClick={() => window.electronAPI.openExternal(EXTERNAL_LINKS.OPENAI_BILLING)} className="pill-paper flex-1 !py-1.5 !text-xs">
+                    {uiLanguage === 'zh' ? '餘額與儲值' : 'Balance'} ↗
+                  </button>
+                  <button type="button" onClick={() => window.electronAPI.openExternal(EXTERNAL_LINKS.OPENAI_USAGE)} className="pill-paper flex-1 !py-1.5 !text-xs">
+                    {uiLanguage === 'zh' ? '用量' : 'Usage'} ↗
+                  </button>
+                </div>
+              </details>
+            </div>
+          </section>
+
+          <section aria-label={t.anywhere.permission}>
+            <div className={`flex items-center justify-between gap-3 rounded-2xl px-3.5 py-3 ${trusted === false ? 'bg-alert/[0.07]' : 'bg-ink/[0.04]'}`}>
+              <span className="min-w-0">
+                <span className="flex items-center gap-2 text-[13px] font-medium text-ink/80">
+                  <span className={`h-1.5 w-1.5 rounded-full ${trusted ? 'bg-ink' : trusted === false ? 'bg-alert' : 'bg-ink/25'}`} />
+                  {t.anywhere.permission}
+                </span>
+                <span className="mt-0.5 block text-xs leading-relaxed text-ink/50">
+                  {trusted ? t.anywhere.permissionGranted : granting ? t.anywhere.granting : t.anywhere.permissionMissing}
+                </span>
+              </span>
+              {trusted === false && !granting && (
+                <button type="button" onClick={() => { setGranting(true); window.electronAPI.requestAccessibility(); }} className="pill-solid shrink-0 !px-3 !py-1.5 !text-xs">
+                  {t.anywhere.grant}
                 </button>
-                <button type="button" onClick={() => window.electronAPI.openExternal(EXTERNAL_LINKS.OPENAI_USAGE)} className="pill-paper flex-1 !py-1.5 !text-xs">
-                  {uiLanguage === 'zh' ? '用量' : 'Usage'} ↗
-                </button>
+              )}
+            </div>
+          </section>
+
+          <section className="space-y-2">
+            <h3 className="eyebrow px-2">{t.anywhere.trigger}</h3>
+            <div className="card space-y-4 p-4">
+              <div className="space-y-2">
+                <Segmented<TriggerKey>
+                  value={settings.triggerKey ?? 'control'}
+                  options={[
+                    { value: 'control', label: '⌃ Control' },
+                    { value: 'fn', label: 'fn' },
+                    { value: 'rightOption', label: t.anywhere.rightOption },
+                    { value: 'off', label: t.anywhere.off },
+                  ]}
+                  onChange={v => update('triggerKey', v)}
+                />
+                <p className="text-xs leading-relaxed text-ink/45">{settings.triggerKey === 'fn' ? t.anywhere.fnHint : t.anywhere.triggerHint}</p>
               </div>
             </div>
           </section>
@@ -259,6 +252,24 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, onSave }) =
           <section className="space-y-2">
             <h3 className="eyebrow px-2">{t.sections.window}</h3>
             <div className="card space-y-4 p-4">
+              <label className="flex cursor-pointer items-start justify-between gap-4">
+                <span>
+                  <span className="block text-[13px] font-medium text-ink/80">{t.anywhere.autoPaste}</span>
+                  <span className="mt-1 block text-xs leading-relaxed text-ink/45">{t.anywhere.autoPasteHint}</span>
+                </span>
+                <input type="checkbox" className="peer sr-only" checked={settings.autoPaste ?? true} onChange={e => update('autoPaste', e.target.checked)} />
+                <span aria-hidden="true" className="relative mt-0.5 h-6 w-10 shrink-0 rounded-full bg-ink/15 transition-colors duration-300 peer-checked:bg-ink
+                  after:absolute after:left-0.5 after:top-0.5 after:h-5 after:w-5 after:rounded-full after:bg-paper after:shadow-knob after:transition-transform after:duration-500 after:ease-spring peer-checked:after:translate-x-4" />
+              </label>
+              <label className="flex cursor-pointer items-start justify-between gap-4">
+                <span>
+                  <span className="block text-[13px] font-medium text-ink/80">{t.anywhere.pointerBadge}</span>
+                  <span className="mt-1 block text-xs leading-relaxed text-ink/45">{t.anywhere.pointerBadgeHint}</span>
+                </span>
+                <input type="checkbox" className="peer sr-only" checked={settings.pointerBadge ?? true} onChange={e => update('pointerBadge', e.target.checked)} />
+                <span aria-hidden="true" className="relative mt-0.5 h-6 w-10 shrink-0 rounded-full bg-ink/15 transition-colors duration-300 peer-checked:bg-ink
+                  after:absolute after:left-0.5 after:top-0.5 after:h-5 after:w-5 after:rounded-full after:bg-paper after:shadow-knob after:transition-transform after:duration-500 after:ease-spring peer-checked:after:translate-x-4" />
+              </label>
               <Row label={t.windowOpacity}>
                 <div className="flex items-center gap-3">
                   <input

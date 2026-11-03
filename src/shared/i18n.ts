@@ -204,7 +204,7 @@ export const translations: Record<Language, Translations> = {
     anywhere: {
       section: '在任何 App 說話',
       trigger: '觸發鍵',
-      triggerHint: '單按一下開始錄音，再按一下就轉成文字。按著不放或搭配其他鍵時不會觸發。',
+      triggerHint: '按一下錄音，再按一下轉成文字。',
       fnHint: '若按 fn 會跳出表情符號，請到「系統設定 › 鍵盤」把「按下 🌐 鍵時」改成「不執行任何動作」。',
       off: '關閉',
       rightOption: '右 ⌥',
@@ -356,7 +356,7 @@ export const translations: Record<Language, Translations> = {
     anywhere: {
       section: 'Dictate anywhere',
       trigger: 'Trigger key',
-      triggerHint: 'Tap once to start, tap again to turn it into text. Holding it or using it in a combination does nothing.',
+      triggerHint: 'Tap to record. Tap again to transcribe.',
       fnHint: 'If fn opens the emoji picker, set System Settings › Keyboard › “Press 🌐 key to” to “Do Nothing”.',
       off: 'Off',
       rightOption: 'Right ⌥',

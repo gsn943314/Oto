@@ -1,6 +1,6 @@
 {
   "name": "voice-input-app",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "A small macOS voice input app powered by OpenAI GPT Transcribe",
   "type": "module",
   "main": "dist/main/main/main.js",
@@ -17,7 +17,8 @@
     "package:mac:dir": "npm run build && electron-builder --mac --dir --publish never",
     "build:helper": "bash scripts/build-helper.sh",
     "check": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.main.json",
-    "test": "npm run build:main && env -u ELECTRON_RUN_AS_NODE electron tests/transcription.cjs"
+    "test": "npm run build:main && env -u ELECTRON_RUN_AS_NODE electron tests/transcription.cjs",
+    "test:overlay": "npm run build:renderer && npm run build:main && env -u ELECTRON_RUN_AS_NODE electron tests/overlay.cjs"
   },
   "keywords": [
     "electron",

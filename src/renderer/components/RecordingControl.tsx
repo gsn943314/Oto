@@ -52,7 +52,7 @@ export const RecordingControl: React.FC<RecordingControlProps> = ({ audioRecorde
       level += (rms - level) * 0.25;
       ringRef.current?.style.setProperty('--level', level.toFixed(3));
       const now = performance.now();
-      if (viaHotkeyRef.current && audioRecorder.isRecording() && now - lastSent > 60) {
+      if (audioRecorder.isRecording() && now - lastSent > 60) {
         lastSent = now;
         window.electronAPI.setOverlayState({ kind: 'recording', level, seconds: Math.floor((Date.now() - startTimeRef.current) / 1000) });
       }
@@ -71,7 +71,7 @@ export const RecordingControl: React.FC<RecordingControlProps> = ({ audioRecorde
     try {
       setError(null);
       setTranscribedText(''); // each recording starts on a clean sheet
-      if (viaHotkey) window.electronAPI.setOverlayState({ kind: 'recording', level: 0, seconds: 0 });
+      window.electronAPI.setOverlayState({ kind: 'recording', level: 0, seconds: 0 });
       await audioRecorder.startRecording();
       startTimeRef.current = Date.now();
       setIsRecording(true);
@@ -80,7 +80,7 @@ export const RecordingControl: React.FC<RecordingControlProps> = ({ audioRecorde
       const appError = error?.type ? error : { type: ErrorType.AUDIO_RECORDING_FAILED, message: error?.message ?? 'Failed to start recording' };
       setError(appError);
       setIsRecording(false);
-      if (viaHotkey) window.electronAPI.setOverlayState({ kind: 'error', label: t.errorCopy[appError.type as ErrorType]?.status ?? t.status.error });
+      window.electronAPI.setOverlayState({ kind: 'error', label: t.errorCopy[appError.type as ErrorType]?.status ?? t.status.error });
     } finally {
       startingRef.current = false;
     }
@@ -96,7 +96,7 @@ export const RecordingControl: React.FC<RecordingControlProps> = ({ audioRecorde
       console.error('Failed to stop recording:', error);
       setError({ type: ErrorType.AUDIO_RECORDING_FAILED, message: error?.message || 'Failed to stop recording', details: error });
       setIsRecording(false);
-      if (viaHotkeyRef.current) window.electronAPI.setOverlayState({ kind: 'error', label: t.errorCopy[ErrorType.AUDIO_RECORDING_FAILED].status });
+      window.electronAPI.setOverlayState({ kind: 'error', label: t.errorCopy[ErrorType.AUDIO_RECORDING_FAILED].status });
     }
   }, [audioRecorder, setIsRecording, setError, onRecordingComplete, t]);
 

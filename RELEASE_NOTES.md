@@ -1,3 +1,12 @@
+# Oto 1.1.1
+
+- Keep the bottom status pill and pointer badge visible across macOS Spaces, including when the main window is hidden or minimized.
+- Show indicators for recordings started with either the trigger key or the app button.
+- Restore active indicators after Space changes without stealing focus; prevent late window creation or expired states from showing obsolete indicators.
+- Put OpenAI API setup first, enlarge Get an API key, collapse Balance/Usage, and move Accessibility permission just below account setup.
+- Simplify Trigger key and move automatic paste and pointer status preferences to Window.
+- Add overlay regression coverage.
+
 # Oto 1.1.0
 
 - Renamed the app to Oto with a minimal rippling O icon.

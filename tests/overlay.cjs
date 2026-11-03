@@ -1,0 +1,51 @@
+const { app, BrowserWindow, systemPreferences } = require('electron');
+const assert = require('node:assert/strict');
+const path = require('node:path');
+const { pathToFileURL } = require('node:url');
+// Load the packaged renderer without launching main.ts, microphone access, or OpenAI.
+Object.defineProperty(app, 'isPackaged', { value: true });
+app.commandLine.appendSwitch('disable-background-timer-throttling');
+const watchdog = setTimeout(() => { console.error('Overlay test timed out'); app.exit(1); }, 15000);
+const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+let spaceChanged;
+const subscribe = systemPreferences.subscribeWorkspaceNotification.bind(systemPreferences);
+systemPreferences.subscribeWorkspaceNotification = (event, callback) => {
+ if (event === 'NSWorkspaceActiveSpaceDidChangeNotification') spaceChanged = callback;
+ return subscribe(event, callback);
+};
+let overlay, main;
+function cleanup() { clearTimeout(watchdog); overlay?.destroy(); main?.destroy(); }
+app.whenReady().then(async () => {
+ const { OverlayWindow } = await import(pathToFileURL(path.join(process.cwd(), 'dist/main/main/OverlayWindow.js')));
+ overlay = new OverlayWindow();
+ const recording = {kind:'recording',level:0.2,seconds:3};
+ await overlay.update(recording);
+ const pill = overlay.pill.peek(), badge = overlay.badge.peek();
+ assert.ok(pill.isVisibleOnAllWorkspaces()); assert.ok(badge.isVisibleOnAllWorkspaces());
+ assert.equal(pill.isFocusable(),false); assert.equal(badge.isFocusable(),false);
+ main = new BrowserWindow({show:false});
+ await main.loadURL('about:blank');
+ main.showInactive(); main.hide();
+ pill.hide(); badge.hide(); spaceChanged(); await delay(40);
+ assert.ok(pill.isVisible(),'pill restored after Space change with main hidden');
+ assert.ok(badge.isVisible(),'pointer badge restored after Space change with main hidden');
+ assert.equal(main.isVisible(),false,'restoration must not bring the main window back');
+ main.showInactive(); main.minimize(); await delay(400);
+ pill.hide(); badge.hide(); spaceChanged(); await delay(40);
+ assert.ok(pill.isVisible()); assert.ok(badge.isVisible());
+ assert.ok(main.isMinimized(),'restoration must not restore the minimized main window');
+ assert.equal(BrowserWindow.getFocusedWindow(),null,'indicators must not steal focus');
+ await overlay.update({kind:'thinking'}); pill.hide(); badge.hide(); spaceChanged(); await delay(40);
+ assert.ok(pill.isVisible()); assert.ok(badge.isVisible());
+ await overlay.update({kind:'hidden'}); spaceChanged(); await delay(350);
+ assert.equal(pill.isVisible(),false); assert.equal(badge.isVisible(),false);
+ await overlay.update({kind:'pasted'}); await delay(1000); pill.hide(); spaceChanged(); await delay(30);
+ assert.ok(pill.isVisible()); assert.equal(badge.isVisible(),false,'expired badge must stay hidden');
+ await delay(700); spaceChanged(); await delay(350);
+ assert.equal(pill.isVisible(),false,'expired completion state must not reappear');
+ overlay.destroy();
+ overlay = new OverlayWindow();
+ const pending = overlay.update(recording); await overlay.update({kind:'hidden'}); await pending;
+ assert.equal(overlay.pill.peek().isVisible(),false,'late window creation must not resurrect a stopped recording');
+ console.log('PASS: real Electron overlays restore recording/processing after Space changes with main hidden/minimized; no focus stealing; hidden and expired states stay hidden; asynchronous stop wins. No microphone or API calls.');
+}).then(() => { cleanup(); app.quit(); }).catch(error => { console.error(error); cleanup(); app.exit(1); });

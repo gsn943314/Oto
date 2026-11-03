@@ -34,7 +34,7 @@ Consistent certificate-based signing is needed for a stable signing identity acr
 Each release includes `SHA256SUMS.txt`. To compare a downloaded archive with its listed checksum:
 
 ```sh
-shasum -a 256 Oto-1.1.0-arm64.zip
+shasum -a 256 Oto-1.1.1-arm64.zip
 ```
 
 For an installed app:

@@ -26,6 +26,7 @@ jobs:
       - run: npm run check
       - run: npm test
       - run: npm run package:mac
+      - run: npm run test:overlay
       - name: Bundle source and checksums
         shell: bash
         run: |

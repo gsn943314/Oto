@@ -12,9 +12,9 @@ I use voice input a lot while developing. I really enjoy Typeless, and wanted to
 
 ## What it does
 
-- Tap **Control**, **fn**, or **Right Option** alone to start recording; tap again to stop and transcribe. Configure this in **Settings → Dictate anywhere → Trigger key**.
+- Tap **Control**, **fn**, or **Right Option** alone to start recording; tap again to stop and transcribe. Configure this in **Settings → Trigger key**.
 - Automatically paste into the focused input field, or leave the result on the clipboard for manual pasting.
-- Keep dictating while the main window is minimized or hidden.
+- Keep dictating across macOS Spaces while the main window is minimized or hidden.
 - See a recording waveform and processing status in a bright floating pill and an optional badge next to the pointer.
 - Let the model detect the spoken language, or pin a language. Chinese transcripts are converted to Traditional Chinese with Taiwan wording.
 - Review and clear local transcription history; adjust window opacity and history length.

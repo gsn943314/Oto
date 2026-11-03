@@ -1,4 +1,4 @@
-# Oto 1.1.0
+# Oto 1.1.1
 
 A small macOS voice input app powered by OpenAI GPT Transcribe. Built because I often use voice input while developing and wanted to try making a small version of my own after enjoying Typeless. This independent project is MIT licensed.
 
@@ -6,9 +6,9 @@ A small macOS voice input app powered by OpenAI GPT Transcribe. Built because I 
 
 | Download | Use it for |
 | --- | --- |
-| `Oto-1.1.0-arm64.dmg` or `.zip` | Ready-to-use app for Apple Silicon Macs |
-| `Oto-1.1.0-x64.dmg` or `.zip` | Ready-to-use app for Intel Macs |
-| `Oto-1.1.0-source.zip` | Source code to inspect, modify, and build yourself |
+| `Oto-1.1.1-arm64.dmg` or `.zip` | Ready-to-use app for Apple Silicon Macs |
+| `Oto-1.1.1-x64.dmg` or `.zip` | Ready-to-use app for Intel Macs |
+| `Oto-1.1.1-source.zip` | Source code to inspect, modify, and build yourself |
 | `SHA256SUMS.txt` | Checksums for the release files |
 
 The app requires macOS 11 or later and an internet connection. The source download needs Node.js 20+ and Xcode Command Line Tools; see [build instructions](https://github.com/gsn943314/Oto#build-from-source).
@@ -27,11 +27,11 @@ See the [full opening and permission guide](https://github.com/gsn943314/Oto/blo
 
 ## This version
 
-- Tap Control, fn, or Right Option to start/stop dictation from another app.
-- Automatic paste with clipboard fallback; minimized/hidden-window support.
-- Bright recording/processing status pill and optional pointer badge.
-- Auto-detect or pin a language; Traditional Chinese conversion.
-- Local history, an organic O icon, and the Oto name.
-- Migrated from Whisper to `gpt-transcribe`; old Shortcut settings removed.
+- Recording and processing indicators persist across macOS Spaces, with the main window hidden or minimized.
+- Starting a recording with the app button also shows the floating indicators.
+- Indicators restore after desktop changes without focusing or restoring the main window; expired messages stay hidden.
+- Settings now starts with the OpenAI API key and a larger key-creation button, followed by Accessibility permission.
+- Balance and Usage links are collapsed under Additional account options; Trigger key is simpler and pointer/paste preferences are under Window.
+- Added an Electron regression test for overlay restoration, minimized/hidden windows, focus, and asynchronous stop handling.
 
 Every user supplies their own API key and pays their own OpenAI API usage. Existing OpenAI keys can be reused when permissions and quota allow this model. No author API keys, recordings, or transcription history are included. Audio is sent directly to OpenAI using the user's account.

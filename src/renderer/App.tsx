@@ -135,7 +135,7 @@ const App: React.FC = () => {
   }, []);
 
   const transcribe = useCallback(async (audioBlob: Blob, duration: number, viaHotkey = false) => {
-    const overlay = (state: OverlayState) => { if (viaHotkey) window.electronAPI.setOverlayState(state); };
+    const overlay = (state: OverlayState) => window.electronAPI.setOverlayState(state);
     overlay({ kind: 'thinking' });
     setIsProcessing(true);
     setError(null);

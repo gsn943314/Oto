@@ -4,6 +4,7 @@
 
 我平常開發時滿常用語音輸入，也很喜歡 Typeless，所以想試著做一個自己的版本：功能簡單、隨時能用，而且可以帶自己的 API Key。這是獨立的個人開源專案，與 Typeless 或 OpenAI 沒有隸屬關係。
 
+
 ## 下載哪個版本？
 
 在 [Release](https://github.com/gsn943314/Oto/releases/latest) 可以選：
@@ -17,7 +18,7 @@
 1. 到 [Releases](https://github.com/gsn943314/Oto/releases/latest) 下載符合電腦的版本：Apple Silicon 選 arm64，Intel 選 x64。
 2. 把 **Oto.app** 放進「應用程式」。這是未經 Apple 公證的版本；若被阻擋，先嘗試開啟一次，再到「系統設定 → 隱私權與安全性 → 仍要打開」，依提示認證並確認開啟。完整步驟見 [開啟與權限指南](../SECURITY_WARNING_SOLUTION.md)。開啟後到 Settings 填入**自己的 [OpenAI API Key](https://platform.openai.com/api-keys)** 並儲存。API 費用由 OpenAI 向使用者帳號收取，需有可用額度與模型存取權限。
 3. 允許麥克風權限，並到「系統設定 → 隱私權與安全性 → 輔助使用」開啟 App 權限。
-4. 在「Dictate anywhere → Trigger key」選 Control、fn 或右 Option。切到其他 App 的輸入框，單按觸發鍵開始錄音，再按一次停止並轉成文字。
+4. 在「Trigger key」選 Control、fn 或右 Option。切到其他 App 的輸入框，單按觸發鍵開始錄音，再按一次停止並轉成文字。
 
 主視窗縮小或隱藏時也能使用；錄音及處理狀態會顯示在螢幕下方，也可以在滑鼠旁顯示。無法自動貼上的輸入框，可以自行從剪貼簿貼上。也能直接點 App 內的錄音按鈕。
 

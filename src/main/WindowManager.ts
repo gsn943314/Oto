@@ -54,13 +54,10 @@ export class WindowManager {
       },
     });
 
-    // 設定視窗行為：固定在當前桌面（Space）
-    // NSWindowCollectionBehaviorCanJoinAllSpaces = 1 << 0 (可以出現在所有桌面)
-    // NSWindowCollectionBehaviorMoveToActiveSpace = 1 << 1 (移動到活動桌面)
-    // 我們不設定這些，讓視窗固定在當前桌面
+    // Keep Oto available on the user's active Space instead of tying activation
+    // to the Space where its main window was originally opened.
     if (process.platform === 'darwin') {
-      // 設定為固定在當前桌面，不跟隨到其他桌面
-      this.window.setVisibleOnAllWorkspaces(false, { visibleOnFullScreen: true });
+      this.window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
     }
 
     // Save window position when moved
